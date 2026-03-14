@@ -1,0 +1,41 @@
+{
+  "name": "Ecommerce Hexagonal Architecture Team",
+  "description": "Builds ecommerce application using hexagonal architecture pattern",
+  "agents": {
+    "hexagon": {
+      "cwd_dir": "/home/Developer/ecommerce/scecomm/tools/AgenticFramework/cases/Case-005_tiny-sync/4-adapters/")
+      "coding_dir": "/home/Developer/ecommerce/scecomm/backend/src/hexagon"
+
+      "role": "Domain & Application Logic Developer - Creates business logic, use cases, domain entities",
+      "host": "127.0.0.1",
+      "cwd": "/home/fidel/Developer/ecommerce/scecomm/backend/src/hexagon",
+      "allowed_tools": ["Read", "Write", "Edit", "Grep", "Glob"]
+      
+      
+    },
+    "ports": {
+      "role": "Port Interface Architect - Defines contracts between hexagon and adapters",
+      "host": "127.0.0.1",
+      "cwd": "/home/fidel/Developer/ecommerce/scecomm/backend/src/ports",
+      "allowed_tools": ["Read", "Write", "Edit", "Grep", "Glob"]
+    },
+    "adapters": {
+      "role": "Adapter Implementation Engineer - Implements ports with real technology",
+      "host": "127.0.0.1",
+      "cwd": "/home/fidel/Developer/ecommerce/scecomm/backend/src/adapters",
+      "allowed_tools": ["Read", "Write", "Edit", "Grep", "Glob", "Bash"]
+    },
+    "infra": {
+      "role": "Infrastructure & Configuration Specialist - Provides configuration, database, logging, and monitoring",
+      "host": "127.0.0.1",
+      "cwd": "/home/fidel/Developer/ecommerce/scecomm/backend/src/infrastructure",
+      "allowed_tools": ["Read", "Write", "Edit", "Grep", "Glob", "Bash"]
+    },
+    "frontend": {
+      "role": "Frontend Developer - Builds SvelteKit web application and UI components",
+      "host": "127.0.0.1",
+      "cwd": "/home/fidel/Developer/ecommerce/scecomm/frontend",
+      "allowed_tools": ["Read", "Write", "Edit", "Grep", "Glob", "Bash"]
+    }
+  }
+}

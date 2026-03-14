@@ -1,0 +1,185 @@
+# =============================================================================
+# TEAM CONFIGURATION
+# =============================================================================
+# Path placeholders use {{ variable }} syntax — resolved at load time by the
+# Python loader (see config.py). Only change the `config` section below.
+# YAML anchors (&/*)  are used for full-node reuse only (tools, model, etc.)
+# =============================================================================
+
+# ===== BASE PATHS (change once) ===============================================
+config:
+  base_path: "/home/fidel/Developer/ecommerce/scecomm"
+  code_base:  "{{ base_path }}/backend/src"
+  case_dir:   "{{ base_path }}/tools/AgenticFramework/cases/Case-005_tiny-sync"
+
+# ===== SHARED DEFAULTS ========================================================
+_defaults:
+
+  model:           &model           "claude-sonnet-4-6"
+  permission_mode: &permission_mode "acceptEdits"
+
+  tools:
+    coding: &coding_tools
+      - Read
+      - Write
+      - Edit
+      - Grep
+      - Glob
+    validator: &validator_tools
+      - Read
+      - Grep
+      - Glob
+    workspace: &workspace_tools
+      - Read
+      - Write
+      - Edit
+      - Grep
+      - Glob
+
+# ===== TEAM ===================================================================
+team:
+  name:        "Ecommerce Hexagonal Architecture Team"
+  description: "Builds ecommerce application using hexagonal architecture pattern"
+
+  # ===== AGENTS ===============================================================
+  agents:
+
+    # --------------------------------------------------------------------------
+    # HUMAN ASSISTANT  (WebSocket — interactive)
+    # --------------------------------------------------------------------------
+    human:
+      id:             "human-assistant"
+      name:           "Human Assistant"
+      role:           "Gathers and clarifies requirements from the human user"
+      comm_type:      ws
+      cwd:            "{{ case_dir }}/0-human"
+      work_dir:       "{{ case_dir }}/0-human/work"
+      prompt_file:    "{{ case_dir }}/0-human/prompt/human-prompt.md"
+      basic_prompt:   "read your prompt at cwd/prompt/human-prompt.md and follow instructions"
+      model:           *model
+      permission_mode: *permission_mode
+      allowed_tools:   *workspace_tools
+
+    # --------------------------------------------------------------------------
+    # CONTRACTS WRITER  (WebSocket — interactive)
+    # --------------------------------------------------------------------------
+    contracts_writer:
+      id:             "contracts-writer"
+      name:           "Contracts Writer"
+      role:           "Produces data contracts and specification documents"
+      comm_type:      ws
+      cwd:            "{{ case_dir }}/1-contracts-writer"
+      work_dir:       "{{ case_dir }}/1-contracts-writer/work"
+      prompt_file:    "{{ case_dir }}/1-contracts-writer/prompt/contracts-prompt.md"
+      basic_prompt:   "read your prompt at cwd/prompt/contracts-prompt.md and follow instructions"
+      model:           *model
+      permission_mode: *permission_mode
+      allowed_tools:   *workspace_tools
+
+    # --------------------------------------------------------------------------
+    # HEXAGON  (SSE — one-shot)
+    # --------------------------------------------------------------------------
+    hexagon:
+      id:             "hexagon"
+      name:           "Hexagon Developer"
+      role:           "Domain & Application Logic Developer — business logic, use cases, entities"
+      comm_type:      sse
+      cwd:            "{{ case_dir }}/2-hexagon"
+      coding_dir:     "{{ code_base }}/hexagon"
+      work_dir:       "{{ case_dir }}/2-hexagon/work"
+      prompt_file:    "{{ case_dir }}/2-hexagon/prompt/hexagon-prompt.md"
+      basic_prompt:   "read your prompt at cwd/prompt/hexagon-prompt.md and follow instructions"
+      model:           *model
+      permission_mode: *permission_mode
+      allowed_tools:   *coding_tools
+      validator:
+        id:             "hexagon-validator"
+        name:           "Hexagon Validator"
+        role:           "Validates domain logic correctness and entity invariants"
+        cwd:            "{{ case_dir }}/2-hexagon"
+        prompt_file:    "{{ case_dir }}/2-hexagon/prompt/hexagon-validator-prompt.md"
+        basic_prompt:   "read your prompt at cwd/prompt/hexagon-validator-prompt.md and follow instructions"
+        model:           *model
+        permission_mode: *permission_mode
+        allowed_tools:   *validator_tools
+
+    # --------------------------------------------------------------------------
+    # PORTS  (SSE — one-shot)
+    # --------------------------------------------------------------------------
+    ports:
+      id:             "ports"
+      name:           "Ports Developer"
+      role:           "Port Interface Architect — defines input/output ports for the hexagon"
+      comm_type:      sse
+      cwd:            "{{ case_dir }}/3-ports"
+      coding_dir:     "{{ code_base }}/ports"
+      work_dir:       "{{ case_dir }}/3-ports/work"
+      prompt_file:    "{{ case_dir }}/3-ports/prompt/ports-prompt.md"
+      basic_prompt:   "simply hi for testing purpose"
+      model:           *model
+      permission_mode: *permission_mode
+      allowed_tools:   *coding_tools
+      validator:
+        id:             "ports-validator"
+        name:           "Ports Validator"
+        role:           "Validates port interface definitions against contracts"
+        cwd:            "{{ case_dir }}/3-ports"
+        prompt_file:    "{{ case_dir }}/3-ports/prompt/ports-validator-prompt.md"
+        basic_prompt:   "read your prompt at cwd/prompt/ports-validator-prompt.md and follow instructions"
+        model:           *model
+        permission_mode: *permission_mode
+        allowed_tools:   *validator_tools
+
+    # --------------------------------------------------------------------------
+    # ADAPTERS  (SSE — one-shot)
+    # --------------------------------------------------------------------------
+    adapters:
+      id:             "adapters"
+      name:           "Adapters Developer"
+      role:           "Adapter Implementer — connects ports to real external systems"
+      comm_type:      sse
+      cwd:            "{{ case_dir }}/4-adapters"
+      coding_dir:     "{{ code_base }}/adapters"
+      work_dir:       "{{ case_dir }}/4-adapters/work"
+      prompt_file:    "{{ case_dir }}/4-adapters/prompt/adapters-prompt.md"
+      basic_prompt:   "read your prompt at cwd/prompt/adapters-prompt.md and follow instructions"
+      model:           *model
+      permission_mode: *permission_mode
+      allowed_tools:   *coding_tools
+      validator:
+        id:             "adapters-validator"
+        name:           "Adapters Validator"
+        role:           "Validates adapter implementations against port contracts"
+        cwd:            "{{ case_dir }}/4-adapters"
+        prompt_file:    "{{ case_dir }}/4-adapters/prompt/adapters-validator-prompt.md"
+        basic_prompt:   "read your prompt at cwd/prompt/adapters-validator-prompt.md and follow instructions"
+        model:           *model
+        permission_mode: *permission_mode
+        allowed_tools:   *validator_tools
+
+    # --------------------------------------------------------------------------
+    # INFRA  (SSE — one-shot)
+    # --------------------------------------------------------------------------
+    infra:
+      id:             "infra"
+      name:           "Infrastructure Developer"
+      role:           "Infrastructure Specialist — DB, messaging, logging, external service clients"
+      comm_type:      sse
+      cwd:            "{{ case_dir }}/5-infra"
+      coding_dir:     "{{ code_base }}/infrastructure"
+      work_dir:       "{{ case_dir }}/5-infra/work"
+      prompt_file:    "{{ case_dir }}/5-infra/prompt/infra-prompt.md"
+      basic_prompt:   "read your prompt at cwd/prompt/infra-prompt.md and follow instructions"
+      model:           *model
+      permission_mode: *permission_mode
+      allowed_tools:   *coding_tools
+      validator:
+        id:             "infra-validator"
+        name:           "Infrastructure Validator"
+        role:           "Validates infrastructure implementations and integrations"
+        cwd:            "{{ case_dir }}/5-infra"
+        prompt_file:    "{{ case_dir }}/5-infra/prompt/infra-validator-prompt.md"
+        basic_prompt:   "read your prompt at cwd/prompt/infra-validator-prompt.md and follow instructions"
+        model:           *model
+        permission_mode: *permission_mode
+        allowed_tools:   *validator_tools
