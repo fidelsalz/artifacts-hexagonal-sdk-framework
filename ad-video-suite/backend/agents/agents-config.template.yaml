@@ -1,0 +1,372 @@
+# =============================================================================
+# AD VIDEO PRODUCTION TEAM — AGENT CONFIGURATION TEMPLATE
+# =============================================================================
+# This file is the source of truth. At campaign creation time config.py reads
+# this template, resolves {campaign_dir} placeholders, and writes the result
+# to {campaign_dir}/agents/agents-config.yaml.
+#
+# cwd_pattern: regex matched against the last path segment of the folder the
+#   user selects. All agents whose pattern matches are offered for that folder.
+#
+# basic_prompt: Python-format string. {cwd} and {prompt_file} are injected at
+#   session creation time (not at config load time).
+#
+# Adding a new agent: add an entry here; it will be picked up on the next
+# campaign creation. Existing campaigns need their own YAML updated manually.
+# =============================================================================
+
+_defaults:
+  model:        &model        "claude-sonnet-4-6"
+  lightmodel:   &lightmodel   "claude-haiku-4-5-20251001"
+  dontask_mode: &dontask_mode "dontAsk"
+
+  basic_prompt: &basic_prompt >-
+    Your working directory is {cwd}.
+    Read your task instructions at {prompt_file}.
+    Everything in your cwd is available as input — read it directly.
+    Write all outputs directly in your cwd following the naming convention
+    described in your instructions.
+    Execute your full task now without asking for confirmation.
+    After completing, remain in this conversation — the user may ask for
+    refinements, additional variants, or adjustments.
+
+  add_dirs: &no_add_dirs []
+
+  tools:
+    write: &write_tools
+      - Read
+      - Write
+      - Edit
+      - Grep
+      - Glob
+
+
+team:
+  name:        "Ad Video Production Team"
+  description: "Produces direct-response 35-second video ad variants"
+
+  agents:
+
+    # -------------------------------------------------------------------------
+    # PRD — Product section
+    # -------------------------------------------------------------------------
+
+    product-creator:
+      id:              "product-creator"
+      name:            "Product Creator"
+      role:            "Collects and structures all product information for downstream marketing agents"
+      comm_type:       ws
+      cwd_pattern:     '[A-Z]{3}$'
+      prompt_file:     "{campaign_dir}/agents/prompts/product-creator.md"
+      basic_prompt: >-
+        Your working directory is {cwd}.
+        Read your detailed instructions at {prompt_file}.
+        Begin the conversation immediately — greet the user in Spanish and ask for product information.
+      model:           *model
+      permission_mode: *dontask_mode
+      allowed_tools:
+        - Read
+        - Write
+        - Edit
+        - Grep
+        - Glob
+        - Bash
+        - WebFetch
+      max_concurrent:  1
+      sections:        [PRD]
+
+    # -------------------------------------------------------------------------
+    # IMG — Image Ads section  (cwd = platform subfolder, e.g. IMG/ML)
+    # -------------------------------------------------------------------------
+
+    ml-planner:
+      id:              "ml-planner"
+      name:            "ML Ad Planner"
+      role:            "Reads product knowledge and plans 5 Mercado Livre ad concepts with audiences, angles, and headlines"
+      comm_type:       ws
+      cwd_pattern:     'A\d+R\d+$'
+      prompt_file:     "{campaign_dir}/agents/prompts/ml-planner.md"
+      basic_prompt: >-
+        Your working directory is {cwd}.
+        The product knowledge folder is available as an extra directory.
+        Read your instructions at {prompt_file} and begin immediately.
+      model:           *model
+      permission_mode: *dontask_mode
+      allowed_tools:   *write_tools
+      max_concurrent:  1
+      sections:        [IMG]
+      add_dirs:        ["../../../PRD", "../../../INT"]
+
+    ml-creator:
+      id:              "ml-creator"
+      name:            "ML Ad Creator"
+      role:            "Generates Mercado Livre ad images via Higgsfield from approved ad concepts"
+      comm_type:       ws
+      cwd_pattern:     'A\d+R\d+$'
+      prompt_file:     "{campaign_dir}/agents/prompts/ml-creator.md"
+      basic_prompt: >-
+        Your working directory is {cwd}.
+        The product knowledge folder is available as an extra directory.
+        Read your instructions at {prompt_file} and begin immediately.
+      model:           *model
+      permission_mode: *dontask_mode
+      allowed_tools:
+        - Read
+        - Write
+        - Edit
+        - Grep
+        - Glob
+        - Bash
+        - mcp__claude_ai_higgsfield__generate_image
+        - mcp__claude_ai_higgsfield__job_status
+        - mcp__claude_ai_higgsfield__job_display
+        - mcp__claude_ai_higgsfield__models_explore
+        - mcp__claude_ai_higgsfield__show_generations
+        - mcp__claude_ai_higgsfield__presets_show
+        - mcp__claude_ai_higgsfield__balance
+        - mcp__claude_ai_higgsfield__list_workspaces
+        - mcp__claude_ai_higgsfield__select_workspace
+        - mcp__claude_ai_higgsfield__show_plans_and_credits
+        - mcp__claude_ai_higgsfield__media_upload
+        - mcp__claude_ai_higgsfield__media_confirm
+      max_concurrent:  1
+      sections:        [IMG]
+      add_dirs:        ["../../../PRD", "../../../INT"]
+
+    # -------------------------------------------------------------------------
+    # INT — Intelligence section
+    # -------------------------------------------------------------------------
+
+    research:
+      id:              "research"
+      name:            "Research Agent"
+      role:            "Audience intelligence — extracts pains, outcomes, and language from product folder"
+      comm_type:       ws
+      cwd_pattern:     '[A-Z]{3}$'
+      prompt_file:     "{campaign_dir}/agents/prompts/research.md"
+      basic_prompt:    *basic_prompt
+      model:           *lightmodel
+      permission_mode: *dontask_mode
+      allowed_tools:   *write_tools
+      max_concurrent:  1
+      sections:        [INT]
+      add_dirs:        ["../PRD"]
+
+    angles:
+      id:              "angles"
+      name:            "Angle Generator"
+      role:            "Generates distinct strategic positioning options for the user to choose from"
+      comm_type:       ws
+      cwd_pattern:     '[A-Z]{3}$'
+      prompt_file:     "{campaign_dir}/agents/prompts/angles.md"
+      basic_prompt:    *basic_prompt
+      model:           *model
+      permission_mode: *dontask_mode
+      allowed_tools:   *write_tools
+      max_concurrent:  1
+      sections:        [INT]
+
+    arcs:
+      id:              "arcs"
+      name:            "Arc Generator"
+      role:            "Generates emotional arc variants for the chosen angle"
+      comm_type:       ws
+      cwd_pattern:     'A\d+$'
+      prompt_file:     "{campaign_dir}/agents/prompts/arcs.md"
+      basic_prompt:    *basic_prompt
+      model:           *model
+      permission_mode: *dontask_mode
+      allowed_tools:   *write_tools
+      max_concurrent:  1
+      sections:        [INT]
+
+    timing:
+      id:              "timing"
+      name:            "Timing Blueprint"
+      role:            "Allocates 35 seconds across arc phases and locks max word counts for scripting"
+      comm_type:       ws
+      cwd_pattern:     'A\d+R\d+$'
+      prompt_file:     "{campaign_dir}/agents/prompts/timing.md"
+      basic_prompt:    *basic_prompt
+      model:           *lightmodel
+      permission_mode: *dontask_mode
+      allowed_tools:   *write_tools
+      max_concurrent:  1
+      sections:        [INT]
+
+    hooks:
+      id:              "hooks"
+      name:            "Hook Generator"
+      role:            "Generates scroll-stopping hook variants that deliver the chosen angle"
+      comm_type:       ws
+      cwd_pattern:     'A\d+R\d+$'
+      prompt_file:     "{campaign_dir}/agents/prompts/hooks.md"
+      basic_prompt:    *basic_prompt
+      model:           *model
+      permission_mode: *dontask_mode
+      allowed_tools:   *write_tools
+      max_concurrent:  1
+      sections:        [INT]
+
+    script:
+      id:              "script"
+      name:            "Script Writer"
+      role:            "Writes the full 35-second spoken script with the chosen hook baked into line 1"
+      comm_type:       ws
+      cwd_pattern:     'A\d+R\d+H\d+$'
+      prompt_file:     "{campaign_dir}/agents/prompts/script.md"
+      basic_prompt:    *basic_prompt
+      model:           *model
+      permission_mode: *dontask_mode
+      allowed_tools:   *write_tools
+      max_concurrent:  1
+      sections:        [SCE]
+
+    storyboard:
+      id:              "storyboard"
+      name:            "Storyboard"
+      role:            "Translates the script into moment-by-moment storyboard with visual, emotional, and narrative intent"
+      comm_type:       ws
+      cwd_pattern:     'A\d+R\d+H\d+$'
+      prompt_file:     "{campaign_dir}/agents/prompts/storyboard.md"
+      basic_prompt:    *basic_prompt
+      model:           *model
+      permission_mode: *dontask_mode
+      allowed_tools:   *write_tools
+      max_concurrent:  1
+      sections:        [SCE]
+
+    scene-specs:
+      id:              "scene-specs"
+      name:            "Scene Specs"
+      role:            "Master production doc — per-timestamp scene specs for Higgsfield and Remotion"
+      comm_type:       ws
+      cwd_pattern:     'A\d+R\d+H\d+$'
+      prompt_file:     "{campaign_dir}/agents/prompts/scene-specs.md"
+      basic_prompt:    *basic_prompt
+      model:           *model
+      permission_mode: *dontask_mode
+      allowed_tools:   *write_tools
+      max_concurrent:  1
+      sections:        [SCE]
+
+    shots:
+      id:              "shots"
+      name:            "Shot List + Asset Tagger"
+      role:            "Flat shot list with reuse decisions and Higgsfield prompts per shot"
+      comm_type:       ws
+      cwd_pattern:     'A\d+R\d+H\d+$'
+      prompt_file:     "{campaign_dir}/agents/prompts/shots.md"
+      basic_prompt:    *basic_prompt
+      model:           *lightmodel
+      permission_mode: *dontask_mode
+      allowed_tools:   *write_tools
+      max_concurrent:  1
+      sections:        [SCE]
+
+    image-prompts:
+      id:              "image-prompts"
+      name:            "Image Prompts"
+      role:            "Transforms approved shots into first/last frame prompts for keyframe generation"
+      comm_type:       ws
+      cwd_pattern:     'A\d+R\d+H\d+$'
+      prompt_file:     "{campaign_dir}/agents/prompts/image-prompts.md"
+      basic_prompt:    *basic_prompt
+      model:           *model
+      permission_mode: *dontask_mode
+      allowed_tools:   *write_tools
+      max_concurrent:  1
+      sections:        [SCE]
+
+    image-generation:
+      id:              "image-generation"
+      name:            "Image Generation"
+      role:            "Generates keyframe images via Higgsfield for each shot in image-prompts.json"
+      comm_type:       ws
+      cwd_pattern:     'A\d+R\d+H\d+$'
+      prompt_file:     "{campaign_dir}/agents/prompts/image-generation.md"
+      basic_prompt:    *basic_prompt
+      model:           *model
+      permission_mode: *dontask_mode
+      allowed_tools:
+        - Read
+        - Write
+        - Bash
+        - Glob
+        - mcp__claude_ai_higgsfield__generate_image
+        - mcp__claude_ai_higgsfield__job_status
+        - mcp__claude_ai_higgsfield__job_display
+        - mcp__claude_ai_higgsfield__models_explore
+        - mcp__claude_ai_higgsfield__show_generations
+        - mcp__claude_ai_higgsfield__presets_show
+        - mcp__claude_ai_higgsfield__balance
+        - mcp__claude_ai_higgsfield__list_workspaces
+        - mcp__claude_ai_higgsfield__select_workspace
+        - mcp__claude_ai_higgsfield__show_plans_and_credits
+      max_concurrent:  1
+      sections:        [SCE]
+
+    video-prompts:
+      id:              "video-prompts"
+      name:            "Video Prompts"
+      role:            "Transforms approved keyframes into motion-generation instructions"
+      comm_type:       ws
+      cwd_pattern:     'A\d+R\d+H\d+$'
+      prompt_file:     "{campaign_dir}/agents/prompts/video-prompts.md"
+      basic_prompt:    *basic_prompt
+      model:           *model
+      permission_mode: *dontask_mode
+      allowed_tools:   *write_tools
+      max_concurrent:  1
+      sections:        [SCE]
+
+    generated-clips:
+      id:              "generated-clips"
+      name:            "Generated Clips"
+      role:            "Executes video generation workflows and produces final shot clip files"
+      comm_type:       ws
+      cwd_pattern:     'A\d+R\d+H\d+$'
+      prompt_file:     "{campaign_dir}/agents/prompts/generated-clips.md"
+      basic_prompt:    *basic_prompt
+      model:           *model
+      permission_mode: *dontask_mode
+      allowed_tools:   *write_tools
+      max_concurrent:  1
+      sections:        [SCE]
+
+    graphics:
+      id:              "graphics"
+      name:            "Graphics Plan"
+      role:            "Remotion motion graphics spec — every graphic with timing, position, and animation"
+      comm_type:       ws
+      cwd_pattern:     'A\d+R\d+H\d+$'
+      prompt_file:     "{campaign_dir}/agents/prompts/graphics.md"
+      basic_prompt:    *basic_prompt
+      model:           *lightmodel
+      permission_mode: *dontask_mode
+      allowed_tools:   *write_tools
+      max_concurrent:  1
+      sections:        [SCE]
+
+# =============================================================================
+# MCP OVERRIDES — per-agent MCP server configuration
+# Keyed by agent ID. Loaded separately from AgentConfig — does NOT affect the
+# generic agent dataclass. Only agents listed here get MCP servers injected.
+# strict_mcp_config: true means ONLY these servers load (no .mcp.json, no user
+# MCP settings). Required when there is no .mcp.json in the project.
+# =============================================================================
+
+mcp_overrides:
+  ml-creator:
+    strict_mcp_config: true
+    mcp_servers:
+      "claude.ai higgsfield":
+        type: http
+        url: "https://mcp.higgsfield.ai/mcp"
+
+  image-generation:
+    strict_mcp_config: true
+    mcp_servers:
+      "claude.ai higgsfield":
+        type: http
+        url: "https://mcp.higgsfield.ai/mcp"

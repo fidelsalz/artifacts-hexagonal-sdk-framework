@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(src/**)",
+      "Edit(src/**)",
+      "Write(src/**)",
+      "Read(CLAUDE.md)",
+      "Read(package.json)",
+      "Read(package-lock.json)",
+      "Read(svelte.config.js)",
+      "Read(vite.config.*)",
+      "Read(tsconfig.json)",
+      "Read(.eslintrc*)",
+      "Read(.prettierrc*)",
+      "Bash(npm run *)",
+      "Bash(npx *)"
+    ],
+    "deny": [
+      "Read(../../**)",
+      "Edit(../../**)",
+      "Write(../../**)",
+      "Bash(*)"
+    ]
+  }
+}
