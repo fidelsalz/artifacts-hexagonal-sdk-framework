@@ -92,13 +92,32 @@ whatever `cwd` the user selects. The campaign folder tree forms naturally as age
           character.json
           approved/approved.png
         script/
+          script.json
         storyboard/
+          M01.json           ← one file per moment
+          M02.json
+          storyboard.md      ← human-readable overview
+          summary.md
         scene-specs/
+          S01.json           ← one file per scene; declares storyboard_id upward reference
+          S02.json
+          summary.md
         shots/
+          S01/               ← one subfolder per scene
+            SH001.json       ← one file per shot; declares scene_id + needs_last_frame
+          S02/
+            SH002.json
+          summary.md
         image-prompts/
+          SH001.json         ← one file per shot (flat, no scene grouping)
+          SH002.json
         image-generation/
+          SH001/attempts|approved|disapproved/
         video-prompts/
+          SH001/attempts|approved|disapproved/
+          summary.md
         generated-clips/
+          SH001/attempts|approved|disapproved/
         graphics/
 ```
 
@@ -194,9 +213,25 @@ safety net; the UI should already know the status from `GET /api/tree` or `POST 
 
 **SCE agent prompt structure** — every SCE agent prompt is structured in this order:
 1. **Inputs guard** — agent checks required files itself and tells the user "I shouldn't be running — missing: [files]" if anything is absent. Acts as a second safety net while the backend status system is being validated.
-2. **Resume check** — if outputs already exist, inventories them, displays `summary.md` if present, suggests the next action, and waits for instruction. Never overwrites automatically.
+2. **Resume check** — if outputs already exist, inventories them, displays `summary.md` if present, suggests the next action, and waits for instruction. Never overwrites automatically. For per-item agents (storyboard, scene-specs, shots, image-prompts) the user can request a **selective edit** — the agent rewrites only the specific item file and leaves the rest untouched.
 3. **Task execution** — runs only if guards pass.
-4. **Summary output** — storyboard, scene-specs, shots, and video-prompts each write a `summary.md` alongside their JSON output: a few prose sentences describing what was produced, in the agent's own voice.
+4. **Summary output** — storyboard, scene-specs, shots, and video-prompts each write a `summary.md` alongside their output: a few prose sentences describing what was produced, in the agent's own voice.
+
+**SCE artifact structure — vertical channels** — each pipeline level uses per-item files so surgical re-runs are structural rather than requiring any tracking mechanism:
+
+| Level | Files | Upward reference |
+|---|---|---|
+| Storyboard | `storyboard/M{##}.json` | — (root level) |
+| Scene-specs | `scene-specs/S{##}.json` | `storyboard_id` → parent moment |
+| Shots | `shots/{scene_id}/SH{###}.json` | `scene_id` → parent scene |
+| Image-prompts | `image-prompts/SH{###}.json` | `shot_id` → parent shot |
+| Image-generation | `image-generation/{shot_id}/attempts\|approved\|disapproved/` | — |
+| Video-prompts | `video-prompts/{shot_id}/attempts\|approved\|disapproved/` | — |
+| Generated-clips | `generated-clips/{shot_id}/attempts\|approved\|disapproved/` | — |
+
+**`needs_last_frame`** — boolean field on every shot JSON. `false` for terminal shots (`continuity_to: null`) and very short static shots; `true` otherwise. Controls whether a last-frame keyframe is generated and passed as `end_image` to Higgsfield. Set by the shots agent; consumed by image-prompts, image-generation, video-prompts, and generated-clips.
+
+**`camera_motion` / `subject_motion` in video-prompts** — scaffolding fields written for human review legibility only. Neither field is passed to Higgsfield. The `motion_prompt` field is the authoritative string submitted to the video model.
 
 ### Campaign Management
 
@@ -213,58 +248,20 @@ or any file in `agents/prompts/`, run:
 # from backend/
 from agents.config import resolve_campaign_config, get_settings
 base = get_settings()["base_path"]
-for slug in ["C001", "C002"]:          # list your campaigns
+for slug in ["C001", "C002", "C003"]:
     content = resolve_campaign_config(slug, base)
     open(f"{base}/{slug}/agents/agents-config.yaml", "w").write(content)
 ```
-Then copy updated prompts: `cp agents/prompts/*.md {campaign}/agents/prompts/`
-
-### Launching an Agent: `POST /api/launch`
-
-The primary endpoint for the UI. Takes the folder path the user clicked and returns everything
-needed to open a WS connection — including agent inference and disambiguation.
-
-```
-POST /api/launch {"path": "/campaigns/C001/INT/A02"}
+Then copy updated prompts:
+```bash
+for c in C001 C002 C003; do
+  cp agents/prompts/*.md {base_path}/$c/agents/prompts/
+done
 ```
 
-**Unambiguous** (one agent matches):
-```json
-{ "ambiguous": false, "agent_id": "arcs", "agent_name": "Arc Generator",
-  "campaign": "C001", "cwd": "/campaigns/C001/INT/A02", "status": "ready",
-  "ws_url": "/ws/agents/arcs/chat?cwd=...&campaign=C001" }
-```
+### API Reference
 
-**Ambiguous** (multiple agents match):
-```json
-{ "ambiguous": true, "campaign": "C001", "cwd": "...",
-  "candidates": [{"id": "timing", "status": "ready"}, {"id": "hooks", "status": "blocked"}, ...] }
-```
-UI shows a picker → re-calls with `agent_id` set.
-
-Note: clicking an arc folder (`INT/A##R##/`) always shows a 3-way picker: `timing`, `hooks`, `character`.
-
-**`status`** on every agent entry: `"completed"` | `"ready"` | `"blocked"`. The UI should prevent launching a `"blocked"` agent. The WS handler enforces this as a hard stop.
-
-**Errors (400):** path not found · no agent matches · `agent_id` doesn't fit the folder.
-
-### Key API Endpoints
-
-| Method | Path | Purpose |
-|---|---|---|
-| `POST` | `/api/launch` | Infer agent from path, return WS URL |
-| `GET` | `/api/tree` | Full campaign tree; `available_agents` is `[{id, status, blocked_by}]` per node |
-| `GET` | `/api/infer-agent?path=...&campaign=...` | Agents matching a folder with `status` + `blocked_by` |
-| `GET` | `/api/agents?campaign=...` | Agent list (with `cwd_pattern`) |
-| `POST` | `/api/promote-hook` | Seed INT files + assets/character/ into SCE/{hook_id}/ (idempotent) |
-| `POST` | `/api/promote-arc` | Seed INT files + assets/character/ into IMG/{platform}/{arc_id}/ (idempotent) |
-| `POST` | `/api/campaigns` | Create new campaign (auto C### slug) |
-| `GET` | `/api/campaigns` | List all campaigns |
-| `GET` | `/api/campaigns/{slug}` | Campaign metadata + path |
-| `WS` | `/ws/agents/{name}/chat?cwd=...&campaign=...` | Agent session |
-| `GET` | `/api/files/list?path=...` | Browse filesystem |
-| `GET` | `/api/files/read?path=...` | Read a file |
-| `POST` | `/api/files/write` | Write a file |
+Full endpoint documentation lives in `API.md` — that file is the single source of truth for request/response shapes, status codes, and field semantics. Do not duplicate API details here.
 
 ### Key Files
 

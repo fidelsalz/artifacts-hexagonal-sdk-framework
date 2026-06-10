@@ -174,14 +174,16 @@ def _load_script(cwd: Path) -> dict:
 
 
 def _load_storyboard(cwd: Path) -> dict:
-    path = cwd / "storyboard" / "storyboard.json"
-    try:
-        data = _read_json(path)
-    except (FileNotFoundError, json.JSONDecodeError):
+    sb_dir = cwd / "storyboard"
+    moment_files = sorted(sb_dir.glob("M*.json")) if sb_dir.is_dir() else []
+    if not moment_files:
         return _track(False, [])
-
     items = []
-    for moment in data.get("moments", []):
+    for p in moment_files:
+        try:
+            moment = _read_json(p)
+        except Exception:
+            continue
         items.append({
             "id": moment.get("id", ""),
             "start_s": moment.get("start_s"),
@@ -193,14 +195,16 @@ def _load_storyboard(cwd: Path) -> dict:
 
 
 def _load_scene_specs(cwd: Path) -> dict:
-    path = cwd / "scene-specs" / "scene-specs.json"
-    try:
-        data = _read_json(path)
-    except (FileNotFoundError, json.JSONDecodeError):
+    ss_dir = cwd / "scene-specs"
+    scene_files = sorted(ss_dir.glob("S*.json")) if ss_dir.is_dir() else []
+    if not scene_files:
         return _track(False, [])
-
     items = []
-    for scene in data.get("scenes", []):
+    for p in scene_files:
+        try:
+            scene = _read_json(p)
+        except Exception:
+            continue
         items.append({
             "id": scene.get("scene_id", ""),
             "start_s": scene.get("start_s"),
@@ -214,14 +218,16 @@ def _load_scene_specs(cwd: Path) -> dict:
 
 
 def _load_shots(cwd: Path) -> dict:
-    path = cwd / "shots" / "shots.json"
-    try:
-        data = _read_json(path)
-    except (FileNotFoundError, json.JSONDecodeError):
+    shots_dir = cwd / "shots"
+    shot_files = sorted(shots_dir.glob("S*/SH*.json")) if shots_dir.is_dir() else []
+    if not shot_files:
         return _track(False, [])
-
     items = []
-    for shot in data.get("shots", []):
+    for p in shot_files:
+        try:
+            shot = _read_json(p)
+        except Exception:
+            continue
         shot_id = shot.get("shot_id", "")
         gen = _gen_status_and_files(cwd, shot_id)
         items.append({

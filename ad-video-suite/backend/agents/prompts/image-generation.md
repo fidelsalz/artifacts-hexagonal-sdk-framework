@@ -1,7 +1,7 @@
 # Image Generation — Task Instructions
 
 Your cwd is the `A##R##H##` hook root inside `SCE/`. Your inputs are:
-- `image-prompts/image-prompts.json` — first/last frame prompts per shot (required)
+- `image-prompts/SH*.json` — individual prompt files per shot (required; read all via glob)
 - `assets/character/character.json` — approved character reference (**optional** — use if present)
 
 ## Inputs guard
@@ -13,7 +13,7 @@ Before anything else, check that all required inputs exist in your cwd. If any a
 Then wait for instructions — do not proceed.
 
 Required:
-- `image-prompts/image-prompts.json` — produced by the image-prompts agent
+- at least one `image-prompts/SH*.json` — produced by the image-prompts agent
 
 ---
 
@@ -28,7 +28,7 @@ before continuing.
 
 ## Step 1 — Scaffold the output folder
 
-Read `image-prompts/image-prompts.json` and extract all `shot_id` values. Cross-reference `shots/shots.json` — **only scaffold and generate shots where `render_type === "video"`**. Skip any shot with `render_type === "motion_graphics"` and note it in your status table.
+Read all `image-prompts/SH*.json` files and collect each `shot_id`. For each shot, read the corresponding `shots/S*/SH{###}.json` to check `render_type` — **only scaffold and generate shots where `render_type === "video"`**. Skip any shot with `render_type === "motion_graphics"` and note it in your status table.
 
 Create the folder tree (idempotent — safe to re-run):
 ```bash
@@ -71,7 +71,7 @@ Do not proceed to generation until the user answers both questions.
 Once the user selects a shot and model:
 
 1. Read `first_frame_prompt`, `last_frame_prompt`, and `negative_prompt` for that shot from
-   `image-prompts/image-prompts.json`
+   `image-prompts/SH{###}.json`
 
 2. **Determine next attempt number**: count all `attempt-*.json` files across `attempts/`,
    `approved/`, and `disapproved/` for that shot. Next number = total count + 1 (zero-padded
@@ -87,13 +87,14 @@ Once the user selects a shot and model:
 
 4. Generate the **first frame**:
    - Call `mcp__claude_ai_higgsfield__generate_image` with `first_frame_prompt`, chosen model,
-     and `medias` (if applicable)
+     `medias` (if applicable), and **`aspect_ratio: "9:16"`** (default for all keyframes)
    - Poll with `mcp__claude_ai_higgsfield__job_status` or `mcp__claude_ai_higgsfield__job_display`
      until the job completes
 
 5. Generate the **last frame** — **only if `last_frame_prompt` is non-null**:
    - Check `last_frame_prompt` in the shot's entry from `image-prompts/image-prompts.json`
-   - If non-null: repeat generation with `last_frame_prompt` and the same `medias` reference
+   - If non-null: repeat generation with `last_frame_prompt`, the same `medias` reference,
+     and **`aspect_ratio: "9:16"`**
    - If null (`needs_last_frame` was `false` for this shot): skip this step; set `last_frame` to `null` in the attempt JSON
 
 6. Write `image-generation/{shot_id}/attempts/attempt-{###}.json`:
@@ -138,5 +139,5 @@ After moving the file, ask if they want to generate another shot.
 - `negative_prompt` from image-prompts.json should be passed to Higgsfield where the API supports it.
 - Attempt numbering counts across all three subfolders to avoid collisions on retries.
 
-<!-- Inputs: {cwd}/image-prompts/image-prompts.json, {cwd}/assets/character/character.json (optional) -->
+<!-- Inputs: {cwd}/image-prompts/SH*.json, {cwd}/assets/character/character.json (optional) -->
 <!-- Output: {cwd}/image-generation/{shot_id}/attempts|approved|disapproved/attempt-{###}.json -->

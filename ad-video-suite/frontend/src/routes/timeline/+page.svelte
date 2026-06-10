@@ -96,6 +96,10 @@
 	let selectedAssetPath = $state<string | null>(null);
 	let imgAdsData = $state<ImgAdsData | null>(null);
 
+	// ── Video prompt detail state ─────────────────────────────────────────────
+	let motionPrompt = $state<string | null>(null);
+	let loadingMotionPrompt = $state(false);
+
 	// ── Detail panel drag state ───────────────────────────────────────────────
 	let detailHeight = $state(288);
 	let detailDragging = $state(false);
@@ -254,6 +258,44 @@
 		selectedAssetPath = selectedAssetPath === path ? null : path;
 		selectedSlot = null;
 	}
+
+	async function loadMotionPrompt(shotId: string) {
+		if (!hookCwd) return;
+		loadingMotionPrompt = true;
+		motionPrompt = null;
+		try {
+			const listRes = await fetch(
+				`${API_BASE}/api/files/list?path=${encodeURIComponent(hookCwd + '/video-prompts/' + shotId + '/approved')}`
+			);
+			if (!listRes.ok) return;
+			const listData = await listRes.json();
+			const jsonFiles = (listData.entries ?? []).filter(
+				(e: { name: string; type: string }) => e.type === 'file' && e.name.endsWith('.json')
+			);
+			if (jsonFiles.length === 0) return;
+			const latest = jsonFiles[jsonFiles.length - 1];
+			const readRes = await fetch(
+				`${API_BASE}/api/files/read?path=${encodeURIComponent(latest.path)}`
+			);
+			if (!readRes.ok) return;
+			const readData = await readRes.json();
+			const parsed = JSON.parse(readData.content);
+			motionPrompt = parsed.motion_prompt ?? null;
+		} catch {
+			motionPrompt = null;
+		} finally {
+			loadingMotionPrompt = false;
+		}
+	}
+
+	$effect(() => {
+		if (selectedSlot?.trackKey === 'video_prompts') {
+			loadMotionPrompt(selectedSlot.item.id);
+		} else {
+			motionPrompt = null;
+			loadingMotionPrompt = false;
+		}
+	});
 
 	// ── Data loading ───────────────────────────────────────────────────────────
 	async function loadCampaigns() {
@@ -600,7 +642,7 @@
 						<!-- Track rows -->
 						{#each TRACKS as track}
 							{@const tdata = timelineData.tracks[track.key]}
-							<div class="flex border-b border-slate-100 last:border-b-0">
+							<div class="flex border-b border-slate-100">
 								<div class="w-24 shrink-0 border-r border-slate-100 flex items-center justify-end pr-3">
 									<span class="text-[9px] font-semibold uppercase tracking-wide text-slate-400">{track.label}</span>
 								</div>
@@ -630,54 +672,102 @@
 									{/if}
 								</div>
 							</div>
-						{/each}
 
-						<!-- Frames lane: first/last frame thumbnails from shots with approved image generation -->
-						{#if timelineData.tracks.shots?.available}
-							{@const shotsWithFrames = timelineData.tracks.shots.items.filter(s =>
-								((s.files as ShotFiles)?.image_generation?.approved?.length ?? 0) > 0
-							)}
-							{#if shotsWithFrames.length > 0}
+							{#if track.key === 'scene_specs'}
+								<!-- Image Prompts lane -->
 								<div class="flex border-b border-slate-100">
 									<div class="w-24 shrink-0 border-r border-slate-100 flex items-center justify-end pr-3">
-										<span class="text-[9px] font-semibold uppercase tracking-wide text-slate-400">Frames</span>
+										<span class="text-[9px] font-semibold uppercase tracking-wide text-slate-400">Img Prompt</span>
 									</div>
-									<div class="flex-1 relative h-16 bg-fuchsia-50/30">
-										{#each shotsWithFrames as shot}
-											{@const files = shot.files as ShotFiles}
-											{@const approved = files?.image_generation?.approved ?? []}
-											{@const sel = isSelected('frames', shot.id)}
-											{@const first = approved[0]}
+									<div class="flex-1 relative h-12 bg-sky-50/60">
+										{#each timelineData.tracks.shots?.items ?? [] as shot}
+											{@const sel = isSelected('image_prompts', shot.id)}
 											<button
-												onclick={() => selectSlot('frames', shot)}
-												title="{shot.id} — {approved.length} frame(s)"
-												style="position:absolute;top:2px;bottom:2px;{slotStyle(shot.start_s, shot.end_s, timelineData.total_duration_s)}"
-												class="flex gap-0.5 items-stretch px-0.5 rounded overflow-hidden border transition-all
-												       {sel ? 'ring-2 ring-fuchsia-400 border-fuchsia-300 bg-fuchsia-50' : 'border-fuchsia-200 bg-white hover:border-fuchsia-300'}"
+												onclick={() => selectSlot('image_prompts', shot)}
+												title="{shot.id}: image prompt"
+												style="position:absolute;top:4px;bottom:4px;{slotStyle(shot.start_s, shot.end_s, timelineData.total_duration_s)}"
+												class="flex flex-col justify-center px-1.5 rounded overflow-hidden text-left
+												       transition-all cursor-pointer bg-sky-100 text-sky-800 border border-sky-200
+												       {sel ? 'ring-2 ring-sky-400' : 'hover:brightness-95'}"
 											>
-												{#if first?.first_frame}
-													<img
-														src="{API_BASE}/api/files/serve?path={encodeURIComponent(first.first_frame)}"
-														alt="first"
-														class="h-full w-auto object-cover rounded-sm"
-													/>
-												{/if}
-												{#if first?.last_frame}
-													<img
-														src="{API_BASE}/api/files/serve?path={encodeURIComponent(first.last_frame)}"
-														alt="last"
-														class="h-full w-auto object-cover rounded-sm"
-													/>
-												{/if}
-												{#if !first?.first_frame && !first?.last_frame}
-													<span class="text-[9px] text-fuchsia-400 self-center px-1">{shot.id}</span>
-												{/if}
+												<span class="text-[9px] font-bold opacity-60 leading-none">{shot.id}</span>
+												<span class="text-[10px] leading-tight mt-0.5">img prompt</span>
+											</button>
+										{/each}
+									</div>
+								</div>
+
+								<!-- Frames lane -->
+								{#if timelineData.tracks.shots?.available}
+									{@const shotsWithFrames = timelineData.tracks.shots.items.filter(s =>
+										((s.files as ShotFiles)?.image_generation?.approved?.length ?? 0) > 0
+									)}
+									{#if shotsWithFrames.length > 0}
+										<div class="flex border-b border-slate-100">
+											<div class="w-24 shrink-0 border-r border-slate-100 flex items-center justify-end pr-3">
+												<span class="text-[9px] font-semibold uppercase tracking-wide text-slate-400">Frames</span>
+											</div>
+											<div class="flex-1 relative h-16 bg-fuchsia-50/30">
+												{#each shotsWithFrames as shot}
+													{@const files = shot.files as ShotFiles}
+													{@const approved = files?.image_generation?.approved ?? []}
+													{@const sel = isSelected('frames', shot.id)}
+													{@const first = approved[0]}
+													<button
+														onclick={() => selectSlot('frames', shot)}
+														title="{shot.id} — {approved.length} frame(s)"
+														style="position:absolute;top:2px;bottom:2px;{slotStyle(shot.start_s, shot.end_s, timelineData.total_duration_s)}"
+														class="flex gap-0.5 items-stretch px-0.5 rounded overflow-hidden border transition-all
+														       {sel ? 'ring-2 ring-fuchsia-400 border-fuchsia-300 bg-fuchsia-50' : 'border-fuchsia-200 bg-white hover:border-fuchsia-300'}"
+													>
+														{#if first?.first_frame}
+															<img
+																src="{API_BASE}/api/files/serve?path={encodeURIComponent(first.first_frame)}"
+																alt="first"
+																class="h-full w-auto object-cover rounded-sm"
+															/>
+														{/if}
+														{#if first?.last_frame}
+															<img
+																src="{API_BASE}/api/files/serve?path={encodeURIComponent(first.last_frame)}"
+																alt="last"
+																class="h-full w-auto object-cover rounded-sm"
+															/>
+														{/if}
+														{#if !first?.first_frame && !first?.last_frame}
+															<span class="text-[9px] text-fuchsia-400 self-center px-1">{shot.id}</span>
+														{/if}
+													</button>
+												{/each}
+											</div>
+										</div>
+									{/if}
+								{/if}
+
+								<!-- Video Prompts lane -->
+								<div class="flex border-b border-slate-100">
+									<div class="w-24 shrink-0 border-r border-slate-100 flex items-center justify-end pr-3">
+										<span class="text-[9px] font-semibold uppercase tracking-wide text-slate-400">Vid Prompt</span>
+									</div>
+									<div class="flex-1 relative h-12 bg-indigo-50/60">
+										{#each timelineData.tracks.shots?.items ?? [] as shot}
+											{@const sel = isSelected('video_prompts', shot.id)}
+											<button
+												onclick={() => selectSlot('video_prompts', shot)}
+												title="{shot.id}: video prompt"
+												style="position:absolute;top:4px;bottom:4px;{slotStyle(shot.start_s, shot.end_s, timelineData.total_duration_s)}"
+												class="flex flex-col justify-center px-1.5 rounded overflow-hidden text-left
+												       transition-all cursor-pointer bg-indigo-100 text-indigo-800 border border-indigo-200
+												       {sel ? 'ring-2 ring-indigo-400' : 'hover:brightness-95'}"
+											>
+												<span class="text-[9px] font-bold opacity-60 leading-none">{shot.id}</span>
+												<span class="text-[10px] leading-tight mt-0.5">vid prompt</span>
 											</button>
 										{/each}
 									</div>
 								</div>
 							{/if}
-						{/if}
+						{/each}
 
 						<!-- Assets row -->
 						{#if timelineData.assets && Object.keys(timelineData.assets).length > 0}
@@ -901,6 +991,29 @@
 									</div>
 								{/each}
 							</div>
+						{/if}
+					</div>
+
+				{:else if selectedSlot && selectedSlot.trackKey === 'video_prompts'}
+					<!-- Video prompt detail -->
+					<div class="w-64 shrink-0 border-r border-slate-100 px-4 py-3 overflow-y-auto space-y-2">
+						<div class="flex items-center gap-2 flex-wrap">
+							<span class="font-mono text-sm font-bold text-slate-900">{selectedSlot.item.id}</span>
+							<span class="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-indigo-100 text-indigo-700">vid prompt</span>
+						</div>
+						<p class="text-xs text-slate-700 leading-relaxed">{selectedSlot.item.label}</p>
+						<div class="flex gap-1.5 text-[11px]">
+							<span class="text-slate-400 font-medium shrink-0">time:</span>
+							<span class="font-mono text-slate-600">{selectedSlot.item.start_s}s – {selectedSlot.item.end_s}s</span>
+						</div>
+					</div>
+					<div class="flex-1 px-4 py-3 overflow-y-auto">
+						{#if loadingMotionPrompt}
+							<p class="text-xs text-slate-400 animate-pulse">Loading…</p>
+						{:else if motionPrompt}
+							<p class="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{motionPrompt}</p>
+						{:else}
+							<p class="text-xs text-slate-400 italic">No video prompt yet.</p>
 						{/if}
 					</div>
 

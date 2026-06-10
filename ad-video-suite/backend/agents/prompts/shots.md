@@ -1,7 +1,7 @@
 # Shot List + Asset Tagger — Task Instructions
 
 Your cwd is the `A##R##H##` hook root inside `SCE/`. Your input is:
-- `scene-specs/scene-specs.json` — approved scene specifications (your primary brief)
+- `scene-specs/S*.json` — individual scene specification files (your primary brief; read all that exist)
 
 ## Inputs guard
 
@@ -12,18 +12,20 @@ Before anything else, check that all required inputs exist in your cwd. If any a
 Then wait for instructions — do not proceed.
 
 Required:
-- `scene-specs/scene-specs.json` — produced by the scene-specs agent
+- at least one `scene-specs/S*.json` — produced by the scene-specs agent
 
 ## Resume check
 
-Before doing anything else, check if `shots/` already exists and contains output files.
+Before doing anything else, check if `shots/` already exists and contains scene subfolders (`S01/`, `S02/`, …).
 
 **If outputs are found:**
-1. List the files present
-2. Show the total shot count and total duration covered from `shots.json`
-3. Display `shots/summary.md` if it exists
-4. Suggest the natural next action: proceed to the image-prompts agent, or regenerate the shot list
-5. Wait for user instruction — do not regenerate or overwrite automatically
+1. Show a per-scene status table: scene ID, shot count, shot IDs
+2. Display `shots/summary.md` if it exists
+3. Suggest the natural next action: proceed to image-prompts, edit shots for a specific scene, or regenerate all
+4. Wait for user instruction — do not regenerate or overwrite automatically
+
+**Editing shots for a specific scene**: if the user wants to revise shots for one scene,
+rewrite only the files inside `shots/{scene_id}/`. Leave other scene subfolders untouched.
 
 **If no outputs found:** proceed with the task below.
 
@@ -63,30 +65,39 @@ Shots must fully cover all scene durations.
 
 ---
 
-Create a `shots/` subfolder inside your cwd and write `shots/shots.json`:
+Create a `shots/` subfolder inside your cwd. For each scene, create a subfolder named after
+the scene ID and write **one JSON file per shot** inside it:
 
+```
+shots/
+  S01/
+    SH001.json
+    SH002.json
+  S02/
+    SH003.json
+```
+
+Each shot file contains only that shot's data:
 ```json
 {
-  "storyboard_id": "SB001",
-  "shots": [
-    {
-      "shot_id": "SH001",
-      "scene_id": "S01",
-      "storyboard_id": "M01",
-      "start_s": 0,
-      "end_s": 4,
-      "duration_s": 4,
-      "purpose": "Establish atmosphere",
-      "coverage": "Full scene coverage",
-      "render_type": "video",
-      "continuity_from": null,
-      "continuity_to": "SH002",
-      "needs_last_frame": true,
-      "notes": "Opening shot."
-    }
-  ]
+  "shot_id": "SH001",
+  "scene_id": "S01",
+  "storyboard_id": "M01",
+  "start_s": 0,
+  "end_s": 4,
+  "duration_s": 4,
+  "purpose": "Establish atmosphere",
+  "coverage": "Full scene coverage",
+  "render_type": "video",
+  "continuity_from": null,
+  "continuity_to": "SH002",
+  "needs_last_frame": true,
+  "notes": "Opening shot."
 }
 ```
+
+`scene_id` is the upward reference to the parent scene. `storyboard_id` is inherited from the
+parent scene file — copy it from `scene-specs/{scene_id}.json`.
 
 All fields are required: `shot_id`, `scene_id`, `storyboard_id`, `start_s`, `end_s`,
 `duration_s`, `purpose`, `coverage`, `render_type`, `continuity_from`, `continuity_to`,
@@ -100,5 +111,5 @@ After writing `shots.json`, write `shots/summary.md` in your own voice as the pr
 
 Do not repeat JSON content — details live in shots.json.
 
-<!-- Inputs: {cwd}/scene-specs/scene-specs.json -->
-<!-- Output: {cwd}/shots/shots.json, {cwd}/shots/summary.md -->
+<!-- Inputs: {cwd}/scene-specs/S*.json -->
+<!-- Output: {cwd}/shots/{scene_id}/SH{###}.json (one per shot), {cwd}/shots/summary.md -->

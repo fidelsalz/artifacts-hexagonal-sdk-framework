@@ -275,7 +275,7 @@ team:
       required_inputs:
         - path: "script/script.json"
           produced_by: "script"
-      output_check: "storyboard/storyboard.json"
+      output_check: "storyboard/M*.json"
 
     scene-specs:
       id:              "scene-specs"
@@ -291,11 +291,11 @@ team:
       max_concurrent:  1
       sections:        [SCE]
       required_inputs:
-        - path: "storyboard/storyboard.json"
+        - path: "storyboard/M*.json"
           produced_by: "storyboard"
         - path: "script/script.json"
           produced_by: "script"
-      output_check: "scene-specs/scene-specs.json"
+      output_check: "scene-specs/S*.json"
 
     shots:
       id:              "shots"
@@ -311,9 +311,9 @@ team:
       max_concurrent:  1
       sections:        [SCE]
       required_inputs:
-        - path: "scene-specs/scene-specs.json"
+        - path: "scene-specs/S*.json"
           produced_by: "scene-specs"
-      output_check: "shots/shots.json"
+      output_check: "shots/S*/SH*.json"
 
     image-prompts:
       id:              "image-prompts"
@@ -329,11 +329,11 @@ team:
       max_concurrent:  1
       sections:        [SCE]
       required_inputs:
-        - path: "shots/shots.json"
+        - path: "shots/S*/SH*.json"
           produced_by: "shots"
-        - path: "scene-specs/scene-specs.json"
+        - path: "scene-specs/S*.json"
           produced_by: "scene-specs"
-      output_check: "image-prompts/image-prompts.json"
+      output_check: "image-prompts/SH*.json"
 
     image-generation:
       id:              "image-generation"
@@ -346,7 +346,7 @@ team:
       model:           *model
       permission_mode: *dontask_mode
       required_inputs:
-        - path: "image-prompts/image-prompts.json"
+        - path: "image-prompts/SH*.json"
           produced_by: "image-prompts"
       output_check: "image-generation/*/approved/*.json"
       allowed_tools:
@@ -383,7 +383,7 @@ team:
       max_concurrent:  1
       sections:        [SCE]
       required_inputs:
-        - path: "shots/shots.json"
+        - path: "shots/S*/SH*.json"
           produced_by: "shots"
         - path: "image-generation/*/approved/*.json"
           produced_by: "image-generation"

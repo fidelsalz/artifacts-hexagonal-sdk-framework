@@ -372,7 +372,7 @@ Write text content to a file. Parent directory must exist.
 
 ### `GET /api/timeline?cwd={abs_path}`
 
-Return all time-positioned artifact tracks plus available assets for a SCE hook root folder (`SCE/A##R##H##/`). Each track reads its corresponding JSON file; if the file is missing or malformed the track returns `available: false` with an empty items array — no error.
+Return all time-positioned artifact tracks plus available assets for a SCE hook root folder (`SCE/A##R##H##/`). Each track reads its source files (see **Track sources** below); if none are found or all are malformed the track returns `available: false` with an empty items array — no error.
 
 **Response**
 ```json
@@ -480,12 +480,12 @@ Return all time-positioned artifact tracks plus available assets for a SCE hook 
 
 **Track sources**
 
-| Track | JSON file (relative to `cwd`) | Format |
+| Track | Files (relative to `cwd`) | Format |
 |---|---|---|
 | `script` | `script/script.json` | flat array of line objects |
-| `storyboard` | `storyboard/storyboard.json` | `moments[]` in a dict |
-| `scene_specs` | `scene-specs/scene-specs.json` | `scenes[]` in a dict |
-| `shots` | `shots/shots.json` | `shots[]` in a dict |
+| `storyboard` | `storyboard/M*.json` | one JSON per moment; each file is a single moment object |
+| `scene_specs` | `scene-specs/S*.json` | one JSON per scene; each file is a single scene object |
+| `shots` | `shots/S*/SH*.json` | one JSON per shot, nested in per-scene subfolders |
 | `graphics` | `graphics/graphics-plan.json` | `graphics[]` in a dict |
 
 **`total_duration_s`** — derived from the highest `end_s` across all tracks; defaults to `35.0` if no items have timing.
@@ -501,7 +501,7 @@ Return all time-positioned artifact tracks plus available assets for a SCE hook 
 | `generated` | Approved clip in `generated-clips/{shot_id}/approved/` — `video_url` is set |
 
 **Shot `files.image_generation`**  
-Each approved attempt includes `first_frame` and `last_frame` — absolute paths to downloaded PNGs in `image-generation/{shot_id}/approved/` (naming: `attempt-001-first-frame.png`). Pass to `GET /api/files/serve` to display. `first_frame_job_id` / `last_frame_job_id` are the originating Higgsfield job IDs. `attempts_count` counts all JSON files across `attempts/`, `approved/`, and `disapproved/`.
+Each approved attempt includes `first_frame` and `last_frame` — absolute paths to downloaded PNGs in `image-generation/{shot_id}/approved/` (naming: `attempt-001-first-frame.png`). Pass to `GET /api/files/serve` to display. `first_frame_job_id` / `last_frame_job_id` are the originating Higgsfield job IDs. `last_frame` and `last_frame_job_id` are `null` for terminal shots (`needs_last_frame: false` in the shot file). `attempts_count` counts all JSON files across `attempts/`, `approved/`, and `disapproved/`.
 
 **`assets` object**  
 Keyed by subfolder name under `assets/`. Empty object `{}` if `assets/` doesn't exist.

@@ -18,14 +18,17 @@ Required:
 
 ## Resume check
 
-Before doing anything else, check if `storyboard/` already exists and contains output files.
+Before doing anything else, check if `storyboard/` already exists and contains `M*.json` files.
 
 **If outputs are found:**
-1. List the files present
-2. Show the total moment count from `storyboard.json`
+1. List the individual moment files present (`M01.json`, `M02.json`, …)
+2. Show the total moment count and time range covered
 3. Display `storyboard/summary.md` if it exists
-4. Suggest the natural next action: proceed to the scene-specs agent, or regenerate the storyboard
+4. Suggest the natural next action: proceed to scene-specs, edit a specific moment, or regenerate all
 5. Wait for user instruction — do not regenerate or overwrite automatically
+
+**Editing a specific moment**: if the user wants to revise one moment, rewrite only that
+`storyboard/M{##}.json` file. Leave all other moment files untouched.
 
 **If no outputs found:** proceed with the task below.
 
@@ -45,28 +48,27 @@ For each moment define:
 - `emotional_goal` — the single emotion this moment should land (e.g. Hope, Relief, Curiosity)
 - `visual_focus` — 2–4 keywords that a cinematographer or AI video model would prioritise
 
-Create a `storyboard/` subfolder inside your cwd and write all outputs there:
+Create a `storyboard/` subfolder inside your cwd. Write **one JSON file per moment**:
+`storyboard/M01.json`, `storyboard/M02.json`, etc.
 
-**`storyboard/storyboard.json`**
+Each moment file contains only that moment's data:
 ```json
 {
-  "storyboard_id": "SB001",
-  "moments": [
-    {
-      "id": "M01",
-      "start_s": 0,
-      "end_s": 4,
-      "purpose": "Hook",
-      "narration": "...",
-      "visual_moment": "...",
-      "emotional_goal": "...",
-      "visual_focus": ["...", "..."]
-    }
-  ]
+  "id": "M01",
+  "start_s": 0,
+  "end_s": 4,
+  "purpose": "Hook",
+  "narration": "...",
+  "visual_moment": "...",
+  "emotional_goal": "...",
+  "visual_focus": ["...", "..."]
 }
 ```
 
-**`storyboard/storyboard.md`** — human-readable review document. For each moment write:
+All fields are required: `id`, `start_s`, `end_s`, `purpose`, `narration`, `visual_moment`,
+`emotional_goal`, `visual_focus`.
+
+**`storyboard/storyboard.md`** — human-readable overview of all moments. For each moment write:
 ```
 ## M01 · 0–4 s · Hook
 **Narration:** "..."
@@ -83,4 +85,4 @@ After writing all storyboard outputs, write `storyboard/summary.md` in your own 
 Do not repeat JSON content — details live in storyboard.json.
 
 <!-- Inputs: {cwd}/script/script.json, {cwd}/timing-blueprint.json, {cwd}/*.md -->
-<!-- Output: {cwd}/storyboard/storyboard.json, {cwd}/storyboard/storyboard.md, {cwd}/storyboard/summary.md -->
+<!-- Output: {cwd}/storyboard/M{##}.json (one per moment), {cwd}/storyboard/storyboard.md, {cwd}/storyboard/summary.md -->

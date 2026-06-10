@@ -1,7 +1,7 @@
 # Scene Specs — Task Instructions
 
 Your cwd is the `A##R##H##` hook root inside `SCE/`. Your inputs are:
-- `storyboard/storyboard.json` — approved storyboard moments (your primary brief)
+- `storyboard/M*.json` — individual moment files (your primary brief; read all that exist)
 - `script/script.json` — spoken script with per-line start_s / end_s timings
 - `timing-blueprint.json` — phase durations and word count limits
 - `assets/character/character.json` — approved character profile (**optional** — read if present, skip if absent)
@@ -16,18 +16,21 @@ Then wait for instructions — do not proceed.
 
 Required:
 - `script/script.json` — produced by the script agent
-- `storyboard/storyboard.json` — produced by the storyboard agent
+- at least one `storyboard/M*.json` — produced by the storyboard agent
 
 ## Resume check
 
-Before doing anything else, check if `scene-specs/` already exists and contains output files.
+Before doing anything else, check if `scene-specs/` already exists and contains `S*.json` files.
 
 **If outputs are found:**
-1. List the files present
-2. Show the total scene count from `scene-specs.json`
+1. List the individual scene files present (`S01.json`, `S02.json`, …)
+2. Show the total scene count
 3. Display `scene-specs/summary.md` if it exists
-4. Suggest the natural next action: proceed to the shots agent, or regenerate scene-specs
+4. Suggest the natural next action: proceed to shots, edit a specific scene, or regenerate all
 5. Wait for user instruction — do not regenerate or overwrite automatically
+
+**Editing a specific scene**: if the user wants to revise one scene, rewrite only that
+`scene-specs/S{##}.json` file. Leave all other scene files untouched.
 
 **If no outputs found:** proceed with the task below.
 
@@ -75,29 +78,29 @@ Do not invent a different person or vary the description between scenes.
 
 ---
 
-Create a `scene-specs/` subfolder inside your cwd and write `scene-specs/scene-specs.json`:
+Create a `scene-specs/` subfolder inside your cwd. Write **one JSON file per scene**:
+`scene-specs/S01.json`, `scene-specs/S02.json`, etc.
 
+Each scene file contains only that scene's data:
 ```json
 {
-  "storyboard_id": "SB001",
-  "scenes": [
-    {
-      "scene_id": "S01",
-      "storyboard_id": "M01",
-      "start_s": 0,
-      "end_s": 4,
-      "purpose": "Establish hopeful morning atmosphere",
-      "setting": "Minimalist bedroom at dawn",
-      "subject": "Window, sheer curtains, sunlight",
-      "visual_description": "Soft golden sunlight enters through sheer curtains while dust motes drift slowly through the air.",
-      "mood": "Peaceful, hopeful, dreamlike",
-      "action": "Curtains gently sway in a light morning breeze.",
-      "render_type": "video",
-      "continuity_notes": "Opening scene. Establish warm visual palette for subsequent scenes."
-    }
-  ]
+  "scene_id": "S01",
+  "storyboard_id": "M01",
+  "start_s": 0,
+  "end_s": 4,
+  "purpose": "Establish hopeful morning atmosphere",
+  "setting": "Minimalist bedroom at dawn",
+  "subject": "Window, sheer curtains, sunlight",
+  "visual_description": "Soft golden sunlight enters through sheer curtains while dust motes drift slowly through the air.",
+  "mood": "Peaceful, hopeful, dreamlike",
+  "action": "Curtains gently sway in a light morning breeze.",
+  "render_type": "video",
+  "continuity_notes": "Opening scene. Establish warm visual palette for subsequent scenes."
 }
 ```
+
+`storyboard_id` is the upward reference — it declares which storyboard moment this scene develops.
+One moment may spawn multiple scenes; each scene references its parent moment.
 
 All fields are required: `scene_id`, `storyboard_id`, `start_s`, `end_s`, `purpose`,
 `setting`, `subject`, `visual_description`, `mood`, `action`, `render_type`, `continuity_notes`.
@@ -110,5 +113,5 @@ After writing `scene-specs.json`, write `scene-specs/summary.md` in your own voi
 
 Do not repeat JSON content — details live in scene-specs.json.
 
-<!-- Inputs: {cwd}/storyboard/storyboard.json, {cwd}/script/script.json, {cwd}/timing-blueprint.json, {cwd}/assets/character/character.json (optional) -->
-<!-- Output: {cwd}/scene-specs/scene-specs.json, {cwd}/scene-specs/summary.md -->
+<!-- Inputs: {cwd}/storyboard/M*.json, {cwd}/script/script.json, {cwd}/timing-blueprint.json, {cwd}/assets/character/character.json (optional) -->
+<!-- Output: {cwd}/scene-specs/S{##}.json (one per scene), {cwd}/scene-specs/summary.md -->

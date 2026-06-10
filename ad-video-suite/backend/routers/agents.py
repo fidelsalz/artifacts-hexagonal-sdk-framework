@@ -12,6 +12,7 @@ log = logging.getLogger(__name__)
 from agents import get_session
 from agents.config import agent_status, agents_for_folder, get_agent_config, get_base_path, get_settings, load_config, load_template_config
 from agents.registry import ConcurrencyLimitError, registry
+from core.audio import format_timing_report, reconcile_script_timing
 from core.promotions import promote_arc, promote_hook
 
 router = APIRouter()
@@ -415,6 +416,15 @@ async def agent_chat_ws(
             return
         log.info("[ws:%s] connected — sending event", agent_name)
         await websocket.send_json({"type": "connected", "agent": agent_name, "cwd": cwd})
+
+        if agent_name == "storyboard":
+            log.info("[ws:storyboard] reconcile_script_timing cwd=%s", cwd)
+            report = reconcile_script_timing(cwd)
+            await websocket.send_json({
+                "type":    "audio_timing",
+                "report":  report,
+                "message": format_timing_report(report),
+            })
 
         log.info("[ws:%s] run_opening_task …", agent_name)
         try:

@@ -1,7 +1,7 @@
 # Video Prompts — Task Instructions
 
 Your cwd is the `A##R##H##` hook root inside `SCE/`. Your inputs are:
-- `shots/shots.json` — approved shot list with durations, boundaries, and continuity links
+- `shots/S*/SH*.json` — individual shot files with durations, boundaries, and continuity links (read all via glob)
 - `image-generation/{shot_id}/approved/*.json` — approved generation record per shot;
   contains `first_frame.prompt`, `first_frame.job_id`, `last_frame.prompt`, `last_frame.job_id`,
   and `character_reference_job_id`
@@ -15,14 +15,14 @@ Before anything else, check that all required inputs exist in your cwd. If any a
 Then wait for instructions — do not proceed.
 
 Required:
-- `shots/shots.json` — produced by the shots agent
+- at least one `shots/S*/SH*.json` — produced by the shots agent
 - at least one `image-generation/*/approved/*.json` — produced by the image-generation agent
 
 ---
 
 ## You are the Video Prompts Agent
 
-**Only process shots where `render_type === "video"`** in `shots/shots.json`. Shots with `render_type === "motion_graphics"` are produced outside this pipeline — skip them and note them in your status table.
+**Only process shots where `render_type === "video"`** — read each `shots/S*/SH*.json` and check `render_type`. Shots with `render_type === "motion_graphics"` are produced outside this pipeline — skip them and note them in your status table.
 
 Your job is to write production-ready motion instructions for each `video` shot — defining how the scene evolves, how subjects move, and how the camera moves between the approved first and last frames.
 
@@ -280,5 +280,5 @@ reference is applied across shots. Example tone:
 
 This is the last prose picture of the full video before generation begins. Do not repeat JSON content.
 
-<!-- Inputs: {cwd}/shots/shots.json, {cwd}/image-generation/{shot_id}/approved/*.json -->
+<!-- Inputs: {cwd}/shots/S*/SH*.json, {cwd}/image-generation/{shot_id}/approved/*.json -->
 <!-- Output: {cwd}/video-prompts/{shot_id}/attempts/attempt-NNN.json, {cwd}/video-prompts/summary.md -->

@@ -25,7 +25,7 @@ read the approved prompt, call Higgsfield, track the result, report to the user.
 
 ## You are the Generated Clips Agent
 
-**Only process shots where `render_type === "video"`** — check `shots/shots.json` and skip any shot with `render_type === "motion_graphics"`. Those are produced outside this pipeline.
+**Only process shots where `render_type === "video"`** — read each `shots/S*/SH*.json` and skip any shot with `render_type === "motion_graphics"`. Those are produced outside this pipeline.
 
 You call Higgsfield to generate video clips from approved motion prompts. You do not modify,
 reinterpret, or improve the prompts — they are final. If the user wants a different prompt,
@@ -71,7 +71,7 @@ generated-clips/
 For each shot, build the `generate_video` call from the approved prompt JSON:
 
 1. `motion_prompt` → `motion_prompt` field
-2. `model` → model field (default `seedance_2_0` if not specified in the prompt)
+2. `model` → model field (default `kling3_0` if not specified in the prompt)
 3. **Duration** — resolve `duration_s` against the model's allowed values:
    - `kling_2_5_turbo`: fixed durations **5 or 10** only. Round `duration_s` to whichever is closer (≤7 → 5, >7 → 10).
    - All other models: pass `duration_s` directly.
@@ -96,10 +96,14 @@ After submitting, poll with `job_status` or `job_display` until complete, then s
 `generated-clips/` folder does not exist yet) for all shots.
 
 1. List all shots that have an approved video-prompt.
-2. Report to the user: shot list, model to be used, and which shots have a
-   `character_reference_job_id`. Confirm model before starting unless already specified.
-3. On user confirmation, create the folder tree and generate clips for all shots sequentially.
-4. After all jobs complete, report results and ask the user to approve or disapprove each clip.
+2. Report to the user:
+   - Shot list with model and duration for each
+   - Which shots have a `character_reference_job_id`
+   - Estimated credit cost if known
+3. **Wait for explicit user confirmation before generating anything.** Do not start generation automatically even if the model is already specified in the prompt files.
+4. After confirmation, ask the user whether to generate all shots at once or one at a time. Default to one at a time.
+5. Create the folder tree and generate clips for the chosen shots.
+6. After each job completes, report the result and ask the user to approve or disapprove before continuing to the next shot.
 
 ---
 
