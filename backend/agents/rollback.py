@@ -47,6 +47,29 @@ def rollback_coding_dir(coding_dir: str) -> list[dict]:
     return events
 
 
+def spread_inputs(cwd: str, in_sources: list) -> list[dict]:
+    """Copy declared contract files into {cwd}/in/, clearing stale files first."""
+    in_dir = Path(cwd) / "in"
+    in_dir.mkdir(parents=True, exist_ok=True)
+    for f in in_dir.iterdir():
+        if f.is_file():
+            f.unlink()
+    events, copied, missing = [], 0, []
+    for src_config in in_sources:
+        src_dir = Path(src_config.source)
+        for filename in src_config.files:
+            src = src_dir / filename
+            if src.exists():
+                shutil.copy2(src, in_dir / filename)
+                copied += 1
+            else:
+                missing.append(filename)
+    events.append({"type": "status", "message": f"Inputs spread: {copied} files copied to in/."})
+    for m in missing:
+        events.append({"type": "status", "message": f"  WARNING: {m} not found — skipped."})
+    return events
+
+
 def clear_out_dir(cwd: str) -> list[dict]:
     """Delete all contents of {cwd}/out/ without removing the folder itself."""
     out_path = Path(cwd) / "out"

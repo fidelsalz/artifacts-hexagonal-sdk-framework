@@ -75,7 +75,7 @@ async def main():
             "UserPromptSubmit": [HookMatcher(hooks=[user_prompt_modifier])],
         },
         allowed_tools=["Read", "Write", "Bash"],
-        model='claude-haiku-4-5-20251001',
+        #model='claude-haiku-4-5-20251001',
         permission_mode="acceptEdits",
     )
     

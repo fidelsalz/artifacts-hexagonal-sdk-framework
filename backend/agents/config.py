@@ -6,7 +6,7 @@ Resolves {{ variable }} path placeholders in order so that derived paths
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional  # still used in dataclass fields
 
@@ -18,6 +18,12 @@ CONFIG_PATH = Path(__file__).parent / "agents-config.yaml"
 # ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
+
+@dataclass
+class InSource:
+    source: str
+    files: list[str]
+
 
 @dataclass
 class ValidatorConfig:
@@ -47,6 +53,7 @@ class AgentConfig:
     allowed_tools: list[str]
     coding_dir: Optional[str] = None
     validator: Optional[ValidatorConfig] = None
+    in_sources: list[InSource] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -83,6 +90,13 @@ def _build_vars(raw: dict) -> dict[str, str]:
 
 def _parse_validator(raw: dict, vars: dict[str, str]) -> ValidatorConfig:
     d = _resolve(raw, vars)
+    # second pass: allow {{ cwd }}, {{ prompt_file }} in basic_prompt
+    validator_vars = {
+        **vars,
+        "cwd":         d.get("cwd", ""),
+        "prompt_file": d.get("prompt_file", ""),
+    }
+    d["basic_prompt"] = _resolve(d["basic_prompt"], validator_vars)
     return ValidatorConfig(
         id=d["id"],
         name=d["name"],
@@ -98,9 +112,22 @@ def _parse_validator(raw: dict, vars: dict[str, str]) -> ValidatorConfig:
 
 def _parse_agent(raw: dict, vars: dict[str, str]) -> AgentConfig:
     d = _resolve(raw, vars)
+    # second pass: allow {{ cwd }}, {{ coding_dir }}, {{ work_dir }}, {{ prompt_file }} in basic_prompt
+    agent_vars = {
+        **vars,
+        "cwd":         d.get("cwd", ""),
+        "coding_dir":  d.get("coding_dir", ""),
+        "work_dir":    d.get("work_dir", ""),
+        "prompt_file": d.get("prompt_file", ""),
+    }
+    d["basic_prompt"] = _resolve(d["basic_prompt"], agent_vars)
     validator = None
     if "validator" in raw:
         validator = _parse_validator(raw["validator"], vars)
+    in_sources = [
+        InSource(source=s["source"], files=list(s["files"]))
+        for s in d.get("in_sources", [])
+    ]
     return AgentConfig(
         id=d["id"],
         name=d["name"],
@@ -115,6 +142,7 @@ def _parse_agent(raw: dict, vars: dict[str, str]) -> AgentConfig:
         allowed_tools=list(d["allowed_tools"]),
         coding_dir=d.get("coding_dir"),
         validator=validator,
+        in_sources=in_sources,
     )
 
 

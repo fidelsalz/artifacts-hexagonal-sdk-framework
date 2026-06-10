@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { API_BASE } from '$lib/config';
 	import { sessionStore } from '$lib/stores/sessionStore.svelte';
-	import type { AgentCandidate, FileEntry, TreeNodeData } from '$lib/types';
+	import type { AgentCandidate, AgentStatus, FileEntry, TreeAgentRef, TreeNodeData } from '$lib/types';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
 	let {
@@ -25,7 +25,7 @@
 	const fileEntries = new SvelteMap<string, FileEntry[]>();
 	const loadingPaths = new SvelteSet<string>();
 	const promoting = new SvelteSet<string>();
-	const inferredAgentIds = new SvelteMap<string, string[]>();
+	const inferredAgents = new SvelteMap<string, AgentCandidate[]>();
 	let selectedPath = $state('');
 
 	// ---------- flat list derivation ----------
@@ -49,7 +49,13 @@
 			const syntheticNode: TreeNodeData = {
 				name: d.name,
 				path: d.path,
-				available_agents: inferredAgentIds.get(d.path) ?? [],
+				available_agents: (inferredAgents.get(d.path) ?? []).map(
+					(c): TreeAgentRef => ({
+						id: c.id,
+						status: c.status ?? 'ready',
+						blocked_by: c.blocked_by ?? [],
+					})
+				),
 				children: [],
 			};
 			items.push(...buildFlatList(syntheticNode, depth + 1));
@@ -81,15 +87,12 @@
 				// Pre-fetch agents for dirs not yet known, so synthetic nodes render with correct agents
 				await Promise.all(
 					entries
-						.filter((e) => e.type === 'dir' && !inferredAgentIds.has(e.path))
+						.filter((e) => e.type === 'dir' && !inferredAgents.has(e.path))
 						.map(async (d) => {
 							const r = await fetch(
 								`${API_BASE}/api/infer-agent?path=${encodeURIComponent(d.path)}&campaign=${encodeURIComponent(campaign)}`
 							);
-							inferredAgentIds.set(
-								d.path,
-								r.ok ? ((await r.json()) as AgentCandidate[]).map((c) => c.id) : []
-							);
+							inferredAgents.set(d.path, r.ok ? ((await r.json()) as AgentCandidate[]) : []);
 						})
 				);
 				fileEntries.set(path, entries);
@@ -107,12 +110,16 @@
 			expandedPaths.add(node.path);
 			loadFiles(node.path);
 		}
-		// Build AgentCandidate list from available_agents strings
-		const agents: AgentCandidate[] = node.available_agents.map((id) => ({
-			id,
-			name: id,
-			role: '',
-		}));
+		// Prefer full candidates from infer-agent (has name/role); fall back to tree refs
+		const agents: AgentCandidate[] =
+			inferredAgents.get(node.path) ??
+			node.available_agents.map((a) => ({
+				id: a.id,
+				name: a.id,
+				role: '',
+				status: a.status,
+				blocked_by: a.blocked_by,
+			}));
 		onFolderSelect(node.path, agents);
 	}
 
@@ -318,7 +325,17 @@
 				{/if}
 
 				{#if node.available_agents.length > 0}
-					<span class="shrink-0 text-[10px] bg-slate-100 text-slate-500 rounded-full px-1.5 py-0.5 font-medium">
+					{@const anyBlocked = node.available_agents.some((a) => a.status === 'blocked')}
+					{@const allDone = node.available_agents.every((a) => a.status === 'completed')}
+					<span
+						class="shrink-0 text-[10px] rounded-full px-1.5 py-0.5 font-medium
+						       {allDone
+							       ? 'bg-emerald-100 text-emerald-700'
+							       : anyBlocked
+							         ? 'bg-amber-100 text-amber-700'
+							         : 'bg-slate-100 text-slate-500'}"
+						title={allDone ? 'All done' : anyBlocked ? 'Some agents blocked' : ''}
+					>
 						{node.available_agents.length}
 					</span>
 				{/if}

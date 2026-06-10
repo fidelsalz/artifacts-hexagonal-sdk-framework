@@ -57,6 +57,18 @@ def promote_hook(campaign_dir: Path, hook_path: Path) -> dict:
             shutil.copy2(src, dst)
             copied.append(filename)
 
+    # Copy assets/character/ from the arc folder if the character agent has run
+    char_src = campaign_dir / "INT" / angle_id / arc_id / "assets" / "character"
+    char_dst = dest_dir / "assets" / "character"
+    if char_src.is_dir():
+        if char_dst.exists():
+            skipped.append("assets/character/")
+        else:
+            shutil.copytree(char_src, char_dst)
+            copied.append("assets/character/")
+    else:
+        missing.append("assets/character/")
+
     return {
         "sce_path":      str(dest_dir),
         "files_copied":  copied,
@@ -116,6 +128,18 @@ def promote_arc(campaign_dir: Path, arc_path: Path, platform: str) -> dict:
         else:
             shutil.copy2(src, dst)
             copied.append(filename)
+
+    # Copy assets/character/ from the arc folder if the character agent has run
+    char_src = arc_dir / "assets" / "character"
+    char_dst = dest_dir / "assets" / "character"
+    if char_src.is_dir():
+        if char_dst.exists():
+            skipped.append("assets/character/")
+        else:
+            shutil.copytree(char_src, char_dst)
+            copied.append("assets/character/")
+    else:
+        missing.append("assets/character/")
 
     return {
         "img_path":      str(dest_dir),

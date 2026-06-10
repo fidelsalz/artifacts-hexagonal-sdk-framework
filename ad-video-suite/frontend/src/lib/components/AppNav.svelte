@@ -8,6 +8,7 @@
 	const links = [
 		{ href: '/', label: 'Campaigns' },
 		{ href: '/dashboard', label: 'Dashboard' },
+		{ href: '/timeline', label: 'Timeline' },
 		{ href: '/settings', label: 'Settings' },
 	];
 

@@ -13,6 +13,7 @@ Global state lives in backend/settings.json:
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -43,6 +44,23 @@ class AgentConfig:
     max_concurrent: int = 1
     sections: list[str] = field(default_factory=list)
     add_dirs: list[str] = field(default_factory=list)
+    required_inputs: list[dict] = field(default_factory=list)
+    output_check: str = ""
+
+
+def agent_status(agent: "AgentConfig", cwd: str) -> tuple[str, list[dict]]:
+    """Return (status, missing) where status is 'completed' | 'ready' | 'blocked'.
+
+    missing is a list of required_inputs entries that are absent from cwd.
+    """
+    cwd_path = Path(cwd)
+    if agent.output_check and list(cwd_path.glob(agent.output_check)):
+        return "completed", []
+    missing = [
+        inp for inp in agent.required_inputs
+        if not list(cwd_path.glob(inp.get("path", "")))
+    ]
+    return ("blocked", missing) if missing else ("ready", [])
 
 
 # ---------------------------------------------------------------------------
@@ -51,8 +69,12 @@ class AgentConfig:
 
 def get_settings() -> dict:
     if SETTINGS_PATH.exists():
-        return json.loads(SETTINGS_PATH.read_text())
-    return {"base_path": "", "active_campaign": "", "max_active_campaigns": 3}
+        s = json.loads(SETTINGS_PATH.read_text())
+    else:
+        s = {"base_path": "", "active_campaign": "", "max_active_campaigns": 3}
+    if not s.get("base_path"):
+        s["base_path"] = os.environ.get("BASE_PATH", "")
+    return s
 
 
 def save_settings(settings: dict) -> None:
@@ -100,6 +122,8 @@ def _parse_agent(raw: dict, vars: dict[str, str] | None = None) -> AgentConfig:
         max_concurrent=int(d.get("max_concurrent", 1)),
         sections=list(d.get("sections") or []),
         add_dirs=list(d.get("add_dirs") or []),
+        required_inputs=list(d.get("required_inputs") or []),
+        output_check=str(d.get("output_check") or ""),
     )
 
 

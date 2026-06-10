@@ -139,27 +139,63 @@
 			<div class="space-y-1.5">
 				<p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Available agents</p>
 				{#each selectedAgents as agent (agent.id)}
+					{@const agentStatus = agent.status ?? 'ready'}
+					{@const isBlocked = agentStatus === 'blocked'}
+					{@const isDone = agentStatus === 'completed'}
 					{@const alreadyOpen = existingSessions.some((s) => s.agentId === agent.id)}
-					<div class="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
-						<div class="flex-1 min-w-0">
-							<span class="text-xs font-semibold text-slate-800">{agent.name || agent.id}</span>
-							{#if agent.role}
-								<span class="ml-2 text-[10px] text-slate-400">{agent.role}</span>
+					{@const missingFiles = (agent.blocked_by ?? []).map((p) => p.split('/').pop() ?? p)}
+					<div
+						class="rounded-lg border px-3 py-2 space-y-1
+						       {isBlocked
+							       ? 'border-amber-200 bg-amber-50/50'
+							       : isDone
+							         ? 'border-emerald-200 bg-emerald-50/40'
+							         : 'border-slate-200 bg-white'}"
+					>
+						<div class="flex items-center gap-2">
+							<div class="flex-1 min-w-0">
+								<span class="text-xs font-semibold {isBlocked ? 'text-amber-800' : isDone ? 'text-emerald-800' : 'text-slate-800'}">
+									{agent.name || agent.id}
+								</span>
+								{#if agent.role}
+									<span class="ml-2 text-[10px] text-slate-400">{agent.role}</span>
+								{/if}
+							</div>
+							{#if alreadyOpen}
+								<span class="text-[10px] text-slate-400 italic">already open</span>
+							{:else if isBlocked}
+								<span class="text-[10px] px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 font-medium shrink-0">
+									Blocked
+								</span>
+							{:else if isDone}
+								<span class="text-[10px] text-emerald-600 font-medium shrink-0">✓ Done</span>
+								<button
+									onclick={() => launch(agent.id)}
+									disabled={launching === agent.id}
+									class="text-[11px] px-2.5 py-1 rounded-md font-medium transition-colors shrink-0
+									       {launching === agent.id
+										       ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+										       : 'border border-emerald-300 text-emerald-700 hover:bg-emerald-50'}"
+								>
+									{launching === agent.id ? 'Launching…' : '↻ Re-run'}
+								</button>
+							{:else}
+								<button
+									onclick={() => launch(agent.id)}
+									disabled={launching === agent.id}
+									class="text-[11px] px-2.5 py-1 rounded-md font-medium transition-colors shrink-0
+									       {launching === agent.id
+										       ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+										       : 'bg-slate-800 text-white hover:bg-slate-700'}"
+								>
+									{launching === agent.id ? 'Launching…' : 'Launch'}
+								</button>
 							{/if}
 						</div>
-						{#if alreadyOpen}
-							<span class="text-[10px] text-slate-400 italic">already open</span>
-						{:else}
-							<button
-								onclick={() => launch(agent.id)}
-								disabled={launching === agent.id}
-								class="text-[11px] px-2.5 py-1 rounded-md font-medium transition-colors shrink-0
-								       {launching === agent.id
-									       ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-									       : 'bg-slate-800 text-white hover:bg-slate-700'}"
-							>
-								{launching === agent.id ? 'Launching…' : 'Launch'}
-							</button>
+						{#if isBlocked && missingFiles.length > 0}
+							<p class="text-[10px] text-amber-700 leading-snug">
+								Needs: {missingFiles.join(', ')}
+							</p>
 						{/if}
 					</div>
 				{/each}
@@ -174,6 +210,7 @@
 				<p class="text-xs font-semibold text-amber-800">Multiple agents available — pick one:</p>
 				<div class="space-y-1">
 					{#each disambiguateCandidates as candidate (candidate.id)}
+						{@const cStatus = candidate.status ?? 'ready'}
 						<button
 							onclick={() => launch(candidate.id)}
 							disabled={!!launching}
@@ -183,6 +220,11 @@
 							<span class="font-semibold text-slate-800">{candidate.name || candidate.id}</span>
 							{#if candidate.role}
 								<span class="text-slate-400">{candidate.role}</span>
+							{/if}
+							{#if cStatus === 'completed'}
+								<span class="ml-auto text-[10px] text-emerald-600 font-medium">✓ Done</span>
+							{:else if cStatus === 'blocked'}
+								<span class="ml-auto text-[10px] text-amber-600 font-medium">Blocked</span>
 							{/if}
 						</button>
 					{/each}

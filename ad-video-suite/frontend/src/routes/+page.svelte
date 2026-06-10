@@ -15,6 +15,7 @@
 	let setupInput = $state('');
 	let setupError = $state('');
 	let setupLoading = $state(false);
+	let loadError = $state('');
 
 	let campaigns = $state<Campaign[]>([]);
 	let listLoading = $state(false);
@@ -25,9 +26,14 @@
 	}
 
 	async function loadSettings() {
-		const res = await fetch(`${API_BASE}/api/settings`);
-		const data = await res.json();
-		basePath = data.base_path ?? '';
+		try {
+			const res = await fetch(`${API_BASE}/api/settings`);
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			const data = await res.json();
+			basePath = data.base_path ?? '';
+		} catch (e) {
+			loadError = e instanceof Error ? e.message : String(e);
+		}
 	}
 
 	async function loadCampaigns() {
@@ -65,7 +71,12 @@
 
 	onMount(async () => {
 		await loadSettings();
-		if (basePath) await loadCampaigns();
+		if (!basePath && import.meta.env.VITE_BASE_PATH) {
+			setupInput = import.meta.env.VITE_BASE_PATH;
+			await saveBasePath();
+		} else if (basePath) {
+			await loadCampaigns();
+		}
 	});
 </script>
 
@@ -84,8 +95,13 @@
 	</AppNav>
 
 	<main class="px-8 py-8 max-w-3xl mx-auto">
+		{#if loadError}
+			<div class="rounded-xl border border-red-200 bg-red-50 px-5 py-4 mb-6 text-sm text-red-700">
+				Cannot reach backend: {loadError}
+			</div>
+		{/if}
 		<!-- Setup banner -->
-		{#if !basePath}
+		{#if !basePath && !loadError}
 			<div class="rounded-xl border border-slate-200 bg-slate-50 p-6">
 				<h2 class="text-sm font-semibold text-slate-800 mb-1">Set campaigns folder</h2>
 				<p class="text-sm text-slate-500 mb-4">Enter the absolute path where campaign folders will be created and stored.</p>

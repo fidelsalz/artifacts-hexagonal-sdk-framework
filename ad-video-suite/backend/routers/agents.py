@@ -10,7 +10,7 @@ from pydantic import BaseModel
 log = logging.getLogger(__name__)
 
 from agents import get_session
-from agents.config import agents_for_folder, get_agent_config, get_base_path, get_settings, load_config, load_template_config
+from agents.config import agent_status, agents_for_folder, get_agent_config, get_base_path, get_settings, load_config, load_template_config
 from agents.registry import ConcurrencyLimitError, registry
 from core.promotions import promote_arc, promote_hook
 
@@ -67,11 +67,18 @@ def _build_tree(path: Path, campaign_slug: str, configs: dict, section: Optional
             if not _CONVENTION_RE.match(name) and not matches_agent:
                 continue
 
-        available = [
-            cfg.id for cfg in configs.values()
-            if re.search(cfg.cwd_pattern, name)
-            and (not cfg.sections or child_section in cfg.sections)
-        ]
+        available = []
+        for cfg in configs.values():
+            if not re.search(cfg.cwd_pattern, name):
+                continue
+            if cfg.sections and child_section not in cfg.sections:
+                continue
+            status, blocked_by = agent_status(cfg, str(child))
+            available.append({
+                "id":         cfg.id,
+                "status":     status,
+                "blocked_by": [inp.get("path", "") for inp in blocked_by],
+            })
         node = {
             "name":             name,
             "path":             str(child),
@@ -183,10 +190,17 @@ async def infer_agent(path: str = Query(...), campaign: Optional[str] = Query(de
     slug = campaign or _campaign_slug_from_path(path)
     section = _section_from_path(path)
     matched = agents_for_folder(folder_name, slug, section)
-    return [
-        {"id": cfg.id, "name": cfg.name, "role": cfg.role}
-        for cfg in matched
-    ]
+    result = []
+    for cfg in matched:
+        status, blocked_by = agent_status(cfg, path)
+        result.append({
+            "id":         cfg.id,
+            "name":       cfg.name,
+            "role":       cfg.role,
+            "status":     status,
+            "blocked_by": [inp.get("path", "") for inp in blocked_by],
+        })
+    return result
 
 
 class LaunchBody(BaseModel):
@@ -230,12 +244,13 @@ async def launch_agent(body: LaunchBody):
             "campaign":   slug,
             "cwd":        str(cwd),
             "candidates": [
-                {"id": c.id, "name": c.name, "role": c.role}
+                {"id": c.id, "name": c.name, "role": c.role, "status": agent_status(c, str(cwd))[0]}
                 for c in candidates
             ],
         }
 
     ws_url = f"/ws/agents/{chosen.id}/chat?cwd={cwd}&campaign={slug}"
+    status, _ = agent_status(chosen, str(cwd))
     return {
         "ambiguous":  False,
         "agent_id":   chosen.id,
@@ -244,6 +259,7 @@ async def launch_agent(body: LaunchBody):
         "campaign":   slug,
         "cwd":        str(cwd),
         "ws_url":     ws_url,
+        "status":     status,
     }
 
 
@@ -354,6 +370,20 @@ async def agent_chat_ws(
     await websocket.accept()
 
     slug = campaign or _campaign_slug_from_path(cwd)
+
+    try:
+        _pre_cfg = get_agent_config(agent_name, slug)
+        _status, _blocked = agent_status(_pre_cfg, cwd)
+        if _status == "blocked":
+            lines = "\n".join(
+                f"  • `{inp.get('path', '')}` — run the {inp.get('produced_by', 'upstream')} agent first"
+                for inp in _blocked
+            )
+            await websocket.send_json({"type": "error", "message": f"Cannot start: missing required inputs:\n{lines}"})
+            await websocket.close()
+            return
+    except Exception:
+        pass
 
     log.info("[ws:%s] slug=%s cwd=%s — get_session", agent_name, slug, cwd)
     try:

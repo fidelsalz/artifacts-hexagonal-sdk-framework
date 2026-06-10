@@ -28,8 +28,8 @@
   let agentPaths = $state<{ cwd: string; coding_dir: string | null } | null>(null);
 
   $effect(() => {
-    const id = agent.id;          // tracked — re-runs whenever the agent changes
-    agentPaths = null;            // reset so FolderExplorer unmounts/remounts clean
+    const id = agent.id;
+    agentPaths = null;
     fetch(`${API_BASE_URL}/api/agents/${id}/paths`)
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) agentPaths = data; })
@@ -54,20 +54,26 @@
     return new Date(iso).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
   }
 
-  /** Returns true for status messages that are lifecycle announcements
-   *  ("Starting X", "X Finished") — already shown in the Row 1 headline. */
+  function fmtDuration(ms: number): string {
+    const s = Math.round(ms / 1000);
+    return s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`;
+  }
+
+  /** Compute finish timestamp from run-start + duration_ms. */
+  function finishTime(runStart: Msg, result: Msg | null): string | null {
+    if (!result?.duration_ms || !runStart.timestamp) return null;
+    return fmtTime(new Date(new Date(runStart.timestamp).getTime() + result.duration_ms).toISOString());
+  }
+
   function isLifecycleStatus(text: string): boolean {
     const t = text.trim();
     return (
-      /^starting\b/i.test(t)  ||   // "Starting Ports Developer"
-      /\bfinished\b/i.test(t) ||   // "Ports Developer Finished"
-      /^\[.+\]/i.test(t)           // "[Ports Validator] Starting validation..." etc.
+      /^starting\b/i.test(t)  ||
+      /\bfinished\b/i.test(t) ||
+      /^\[.+\]/i.test(t)
     );
   }
 
-  /** Group messages into per-run blocks.
-   *  Each block owns its status, system, result, and assistant messages.
-   *  Row 1 = status bar   Row 2 = session+result   Row 3 = assistant text */
   function buildRuns(messages: Msg[]): RunBlock[] {
     const runs: RunBlock[] = [];
     let i = 0;
@@ -95,6 +101,31 @@
 
   const agentRuns     = $derived(buildRuns(agent.messages));
   const validatorRuns = $derived(buildRuns(validator.messages));
+  const totalRuns     = $derived(Math.max(agentRuns.length, validatorRuns.length));
+  const runIndices    = $derived(Array.from({ length: totalRuns }, (_, i) => i));
+
+  // Track which run blocks are collapsed (by index).
+  // Auto-collapse all-but-last when a new run starts.
+  let collapsedRuns = $state<Set<number>>(new Set());
+  let _prevCount = 0;
+
+  $effect(() => {
+    const count = agentRuns.length; // reactive
+    if (count !== _prevCount) {
+      if (count > 1) {
+        const next = new Set<number>();
+        for (let i = 0; i < count - 1; i++) next.add(i);
+        collapsedRuns = next;
+      }
+      _prevCount = count;
+    }
+  });
+
+  function toggleRun(i: number) {
+    const next = new Set(collapsedRuns);
+    if (next.has(i)) next.delete(i); else next.add(i);
+    collapsedRuns = next;
+  }
 </script>
 
 <!-- Indigo left-border accent marks this as a coding agent panel -->
@@ -123,144 +154,191 @@
   <div class="grid grid-cols-[2fr_1fr] gap-4 items-start">
 
     <!-- ── LEFT ── -->
-    <div class="flex flex-col gap-4 min-w-0">
+    <div class="flex flex-col gap-2 min-w-0">
 
-      {#if agentRuns.length > 0 || agent.status === 'running'}
+      {#if totalRuns > 0}
 
-        {#each agentRuns as run, ri}
-          <div class="flex flex-col gap-2">
+        {#each runIndices as ri}
+          {@const aRun = agentRuns[ri] ?? null}
+          {@const vRun = validatorRuns[ri] ?? null}
+          {@const isLastAgentRun    = ri === agentRuns.length - 1}
+          {@const isLastValidatorRun = ri === validatorRuns.length - 1}
+          {@const collapsed = collapsedRuns.has(ri)}
+          {@const agentRunning    = agent.status     === 'running' && isLastAgentRun}
+          {@const validatorRunning = validator.status === 'running' && isLastValidatorRun}
+          {@const agentFinish    = aRun ? finishTime(aRun.runStart, aRun.result) : null}
+          {@const validatorFinish = vRun ? finishTime(vRun.runStart, vRun.result) : null}
 
-            <!-- ── ROW 1: status bar ── -->
-            <div class="rounded border bg-muted/40 px-3 py-2 flex flex-col gap-1">
+          <div class="rounded-lg border border-zinc-200 overflow-hidden">
 
-              <!-- Starting / Finished headline -->
-              <div class="flex items-center gap-2 text-xs">
-                <span class="text-blue-400">▶</span>
-                <span class="font-medium text-foreground">Starting...</span>
-                {#if run.runStart.timestamp}
-                  <span class="text-[10px] text-muted-foreground">{fmtTime(run.runStart.timestamp)}</span>
+            <!-- ── Collapsible header ── -->
+            <button
+              class="w-full flex items-center gap-1.5 px-3 py-2 bg-zinc-50 hover:bg-zinc-100 text-[11px] text-left transition-colors select-none"
+              onclick={() => toggleRun(ri)}
+            >
+              <!-- Iteration number -->
+              <span class="font-mono font-bold text-zinc-400 min-w-[1.5rem]">#{ri + 1}</span>
+
+              <!-- Agent timing -->
+              <span class="text-blue-400 font-bold">▶</span>
+              {#if aRun}
+                <span class="font-mono text-zinc-600">{fmtTime(aRun.runStart.timestamp)}</span>
+                {#if agentFinish}
+                  <span class="text-zinc-400">→</span>
+                  <span class="font-mono text-green-700">{agentFinish}</span>
+                  <span class="text-zinc-400">({fmtDuration(aRun.result!.duration_ms)})</span>
+                {:else if agentRunning}
+                  <span class="text-zinc-400">→</span>
+                  <span class="text-blue-500 animate-pulse">running…</span>
                 {/if}
-                {#if run.result}
-                  <span class="ml-auto flex items-center gap-1.5 text-xs">
-                    <span class="text-green-500">✓</span>
-                    <span class="font-medium text-green-700">Finished</span>
-                    <span class="text-[10px] text-muted-foreground">{(run.result.duration_ms / 1000).toFixed(1)}s</span>
-                  </span>
-                {:else if agent.status === 'running' && ri === agentRuns.length - 1}
-                  <span class="ml-auto text-[10px] text-blue-500 animate-pulse">running…</span>
+              {:else if agentRunning}
+                <span class="text-blue-500 animate-pulse">running…</span>
+              {/if}
+
+              <!-- Validator timing (only when it exists or is running) -->
+              {#if vRun || validatorRunning}
+                <span class="text-zinc-300 mx-0.5">│</span>
+                <span class="text-amber-500 font-bold">◈</span>
+                {#if vRun}
+                  <span class="font-mono text-zinc-600">{fmtTime(vRun.runStart.timestamp)}</span>
+                  {#if validatorFinish}
+                    <span class="text-zinc-400">→</span>
+                    <span class="font-mono text-green-700">{validatorFinish}</span>
+                  {:else if validatorRunning}
+                    <span class="text-zinc-400">→</span>
+                    <span class="text-amber-500 animate-pulse">running…</span>
+                  {/if}
+                {:else if validatorRunning}
+                  <span class="text-amber-500 animate-pulse">running…</span>
                 {/if}
-              </div>
+              {/if}
 
-              <!-- Live status / rollback / clear messages -->
-              {#each run.statusMsgs as sm}
-                <p class="text-[11px] text-muted-foreground italic pl-4">→ {sm.text}</p>
-              {/each}
+              <!-- Right side: status chip + chevron -->
+              <span class="ml-auto flex items-center gap-2">
+                {#if agentRunning || validatorRunning}
+                  <span class="text-blue-500 animate-pulse">● active</span>
+                {:else if aRun?.result && vRun?.result}
+                  <span class="text-green-600">✓ done</span>
+                {:else if aRun?.result}
+                  <span class="text-zinc-500">agent done</span>
+                {/if}
+                <span class="text-zinc-400 text-[10px]">{collapsed ? '▶' : '▼'}</span>
+              </span>
+            </button>
 
-            </div>
+            <!-- ── Collapsible body ── -->
+            {#if !collapsed}
+              <div class="flex flex-col gap-3 px-3 py-3 border-t border-zinc-100">
 
-            <!-- ── ROW 2: session + result ── -->
-            {#if run.system || run.result}
-              <div class="flex gap-2">
-                {#if run.system}
-                  <div class="flex-1 min-w-0 rounded border bg-muted/50 px-2 py-1.5 text-[11px] font-mono">
-                    <div class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-foreground">
-                      <span class="text-muted-foreground">Model</span><span class="truncate">{run.system.model}</span>
-                      <span class="text-muted-foreground">CWD</span><span class="truncate">{run.system.cwd}</span>
-                      <span class="text-muted-foreground">Mode</span><span>{run.system.permission_mode}</span>
-                      <span class="text-muted-foreground">Tools</span><span>{run.system.tools_count}</span>
+                <!-- ── Agent section ── -->
+                {#if aRun}
+
+                  <!-- Status messages (pre-run spread, rollback, etc.) -->
+                  {#if aRun.statusMsgs.length > 0}
+                    <div class="rounded border bg-muted/40 px-3 py-2 flex flex-col gap-0.5">
+                      {#each aRun.statusMsgs as sm}
+                        <p class="text-[11px] text-muted-foreground italic">→ {sm.text}</p>
+                      {/each}
                     </div>
-                  </div>
-                {/if}
-                {#if run.result}
-                  <div class="flex-1 min-w-0 rounded border border-green-200 bg-green-50 px-2 py-1.5 text-[11px] font-mono">
-                    <div class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-foreground">
-                      <span class="text-muted-foreground">Turns</span><span>{run.result.num_turns}</span>
-                      <span class="text-muted-foreground">Cost</span><span>${run.result.total_cost_usd.toFixed(6)}</span>
-                      <span class="text-muted-foreground">In</span><span>{run.result.input_tokens.toLocaleString()} tok</span>
-                      <span class="text-muted-foreground">Out</span><span>{run.result.output_tokens.toLocaleString()} tok</span>
-                      <span class="text-muted-foreground">Cache</span><span>{run.result.cache_read_tokens.toLocaleString()} tok</span>
+                  {/if}
+
+                  <!-- System + Result boxes -->
+                  {#if aRun.system || aRun.result}
+                    <div class="flex gap-2">
+                      {#if aRun.system}
+                        <div class="flex-1 min-w-0 rounded border bg-muted/50 px-2 py-1.5 text-[11px] font-mono">
+                          <div class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-foreground">
+                            <span class="text-muted-foreground">Model</span><span class="truncate">{aRun.system.model}</span>
+                            <span class="text-muted-foreground">CWD</span><span class="truncate">{aRun.system.cwd}</span>
+                            <span class="text-muted-foreground">Mode</span><span>{aRun.system.permission_mode}</span>
+                            <span class="text-muted-foreground">Tools</span><span>{aRun.system.tools_count}</span>
+                          </div>
+                        </div>
+                      {/if}
+                      {#if aRun.result}
+                        <div class="flex-1 min-w-0 rounded border border-green-200 bg-green-50 px-2 py-1.5 text-[11px] font-mono">
+                          <div class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-foreground">
+                            <span class="text-muted-foreground">Turns</span><span>{aRun.result.num_turns}</span>
+                            <span class="text-muted-foreground">Cost</span><span>${aRun.result.total_cost_usd.toFixed(6)}</span>
+                            <span class="text-muted-foreground">In</span><span>{aRun.result.input_tokens.toLocaleString()} tok</span>
+                            <span class="text-muted-foreground">Out</span><span>{aRun.result.output_tokens.toLocaleString()} tok</span>
+                            <span class="text-muted-foreground">Cache</span><span>{aRun.result.cache_read_tokens.toLocaleString()} tok</span>
+                          </div>
+                        </div>
+                      {/if}
                     </div>
-                  </div>
+                  {/if}
+
+                  <!-- Assistant text -->
+                  {#each aRun.assistantMsgs as am}
+                    <div class="rounded-md border bg-background px-3 py-2 text-sm text-foreground whitespace-pre-wrap">{am.text}</div>
+                  {/each}
+
+                {:else if agentRunning}
+                  <p class="text-xs text-blue-500 animate-pulse italic px-1">Agent is running…</p>
                 {/if}
+
+                <!-- ── Validator section ── -->
+                {#if vRun || validatorRunning}
+
+                  <div class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest text-amber-600">
+                    <div class="flex-1 border-t border-amber-200"></div>
+                    <span>Validator</span>
+                    <div class="flex-1 border-t border-amber-200"></div>
+                  </div>
+
+                  {#if vRun}
+
+                    <!-- Status messages -->
+                    {#if vRun.statusMsgs.length > 0}
+                      <div class="rounded border bg-muted/40 px-3 py-2 flex flex-col gap-0.5">
+                        {#each vRun.statusMsgs as sm}
+                          <p class="text-[11px] text-muted-foreground italic">→ {sm.text}</p>
+                        {/each}
+                      </div>
+                    {/if}
+
+                    <!-- System + Result boxes -->
+                    {#if vRun.system || vRun.result}
+                      <div class="flex gap-2">
+                        {#if vRun.system}
+                          <div class="flex-1 min-w-0 rounded border bg-muted/50 px-2 py-1.5 text-[11px] font-mono">
+                            <div class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5">
+                              <span class="text-muted-foreground">Model</span><span class="truncate">{vRun.system.model}</span>
+                              <span class="text-muted-foreground">Mode</span><span>{vRun.system.permission_mode}</span>
+                            </div>
+                          </div>
+                        {/if}
+                        {#if vRun.result}
+                          <div class="flex-1 min-w-0 rounded border border-green-200 bg-green-50 px-2 py-1.5 text-[11px] font-mono">
+                            <div class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5">
+                              <span class="text-muted-foreground">Cost</span><span>${vRun.result.total_cost_usd.toFixed(6)}</span>
+                              <span class="text-muted-foreground">Out</span><span>{vRun.result.output_tokens.toLocaleString()} tok</span>
+                            </div>
+                          </div>
+                        {/if}
+                      </div>
+                    {/if}
+
+                    <!-- Assistant text -->
+                    {#each vRun.assistantMsgs as am}
+                      <div class="rounded-md border border-amber-100 bg-amber-50/40 px-3 py-2 text-sm text-foreground whitespace-pre-wrap">{am.text}</div>
+                    {/each}
+
+                  {:else}
+                    <p class="text-xs text-amber-500 animate-pulse italic px-1">Validator is running…</p>
+                  {/if}
+
+                {/if}
+
               </div>
             {/if}
-
-            <!-- ── ROW 3: assistant messages ── -->
-            {#each run.assistantMsgs as am}
-              <div class="rounded-md border bg-background px-3 py-2 text-sm text-foreground whitespace-pre-wrap">{am.text}</div>
-            {/each}
 
           </div>
         {/each}
 
       {:else}
         <p class="text-sm text-muted-foreground italic">Click Run to start.</p>
-      {/if}
-
-      <!-- ── Validator ── -->
-      {#if validatorRuns.length > 0 || validator.status === 'running'}
-        <div class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest text-amber-600">
-          <div class="flex-1 border-t border-amber-200"></div>
-          <span>Validator</span>
-          <div class="flex-1 border-t border-amber-200"></div>
-        </div>
-
-        {#each validatorRuns as run, ri}
-          <div class="flex flex-col gap-2">
-
-            <!-- Row 1 -->
-            <div class="rounded border bg-muted/40 px-3 py-2 flex flex-col gap-1">
-              <div class="flex items-center gap-2 text-xs">
-                <span class="text-amber-400">▶</span>
-                <span class="font-medium text-foreground">Starting...</span>
-                {#if run.runStart.timestamp}
-                  <span class="text-[10px] text-muted-foreground">{fmtTime(run.runStart.timestamp)}</span>
-                {/if}
-                {#if run.result}
-                  <span class="ml-auto flex items-center gap-1.5 text-xs">
-                    <span class="text-green-500">✓</span>
-                    <span class="font-medium text-green-700">Finished</span>
-                    <span class="text-[10px] text-muted-foreground">{(run.result.duration_ms / 1000).toFixed(1)}s</span>
-                  </span>
-                {:else if validator.status === 'running' && ri === validatorRuns.length - 1}
-                  <span class="ml-auto text-[10px] text-amber-500 animate-pulse">running…</span>
-                {/if}
-              </div>
-              {#each run.statusMsgs as sm}
-                <p class="text-[11px] text-muted-foreground italic pl-4">→ {sm.text}</p>
-              {/each}
-            </div>
-
-            <!-- Row 2 -->
-            {#if run.system || run.result}
-              <div class="flex gap-2">
-                {#if run.system}
-                  <div class="flex-1 min-w-0 rounded border bg-muted/50 px-2 py-1.5 text-[11px] font-mono">
-                    <div class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5">
-                      <span class="text-muted-foreground">Model</span><span class="truncate">{run.system.model}</span>
-                      <span class="text-muted-foreground">Mode</span><span>{run.system.permission_mode}</span>
-                    </div>
-                  </div>
-                {/if}
-                {#if run.result}
-                  <div class="flex-1 min-w-0 rounded border border-green-200 bg-green-50 px-2 py-1.5 text-[11px] font-mono">
-                    <div class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5">
-                      <span class="text-muted-foreground">Cost</span><span>${run.result.total_cost_usd.toFixed(6)}</span>
-                      <span class="text-muted-foreground">Out</span><span>{run.result.output_tokens.toLocaleString()} tok</span>
-                    </div>
-                  </div>
-                {/if}
-              </div>
-            {/if}
-
-            <!-- Row 3 -->
-            {#each run.assistantMsgs as am}
-              <div class="rounded-md border border-amber-100 bg-amber-50/40 px-3 py-2 text-sm text-foreground whitespace-pre-wrap">{am.text}</div>
-            {/each}
-
-          </div>
-        {/each}
-
       {/if}
 
     </div>

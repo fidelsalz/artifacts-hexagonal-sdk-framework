@@ -20,7 +20,7 @@ from claude_agent_sdk import (
 
 from .base import AgentBase
 from .config import get_agent_config, AgentConfig
-from .rollback import rollback_coding_dir, clear_out_dir
+from .rollback import rollback_coding_dir, clear_out_dir, spread_inputs
 
 
 class CodingAgent(AgentBase):
@@ -41,6 +41,9 @@ class CodingAgent(AgentBase):
 
     async def pre_run(self) -> AsyncGenerator[dict, None]:
         yield {"type": "status", "message": f"[{self.cfg.name}] Starting..."}
+        if self.cfg.in_sources:
+            for event in spread_inputs(self.cfg.cwd, self.cfg.in_sources):
+                yield event
         if self.cfg.coding_dir:
             for event in rollback_coding_dir(self.cfg.coding_dir):
                 yield event

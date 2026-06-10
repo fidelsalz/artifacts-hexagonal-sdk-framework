@@ -54,10 +54,19 @@ whatever `cwd` the user selects. The campaign folder tree forms naturally as age
       marketing_profile.json
       assets.json
     IMG/                     ← Image Ads section
-      ML/                    ← Mercado Livre platform subfolder (cwd for ml-* agents)
-        ad_plan.md
-        ad_concepts.json
-        ads/                 ← generated ad images
+      ML/                    ← Mercado Livre platform subfolder
+        A01R01/              ← arc subfolder (cwd for ml-* agents, seeded by promote-arc)
+          research.md
+          A01.md
+          A01R01.md
+          hooks-index.md
+          A01R01H01.md       ← one per hook
+          assets/character/  ← copied from INT by promote-arc
+            character.json
+            approved/approved.png
+          ad_plan.md
+          ad_concepts.json
+          ads/               ← generated ad images
     INT/                     ← Intelligence section
       research.md
       A01/                   ← created by Angles agent (cwd = INT/)
@@ -65,13 +74,31 @@ whatever `cwd` the user selects. The campaign folder tree forms naturally as age
         A01R01/              ← created by Arcs agent (cwd = INT/A01/)
           A01R01.md
           timing-blueprint.json
-          A01R01H01/         ← created by Hooks agent (cwd = INT/A01R01/)
+          assets/character/  ← created by Character agent (cwd = INT/A01/A01R01/)
+            character.json
+            attempts/
+            disapproved/
+            approved/approved.png
+          A01R01H01/         ← created by Hooks agent (cwd = INT/A01/A01R01/)
             A01R01H01.md
     SCE/                     ← Scenification section
-      A01R01H01/             ← hook root
+      A01R01H01/             ← hook root (seeded by promote-hook)
+        research.md
+        A01.md
+        A01R01.md
+        timing-blueprint.json
+        A01R01H01.md
+        assets/character/    ← copied from INT by promote-hook
+          character.json
+          approved/approved.png
         script/
+        storyboard/
         scene-specs/
         shots/
+        image-prompts/
+        image-generation/
+        video-prompts/
+        generated-clips/
         graphics/
 ```
 
@@ -95,7 +122,12 @@ Each agent declares two routing fields:
 - **`cwd_pattern`** — regex run via `re.search()` against the **last segment** of the selected folder
 - **`sections`** — list of 3-letter section codes where this agent is valid (empty = unrestricted)
 
-Both must match for an agent to be offered. Inference extracts the section from the clicked path
+Both must match for an agent to be offered. SCE agents additionally declare:
+
+- **`required_inputs`** — list of `{path, produced_by}` dicts; paths are relative to `cwd` and support glob patterns (e.g. `image-generation/*/approved/*.json`)
+- **`output_check`** — single path/glob relative to `cwd` that signals the agent has already run
+
+These power the `agent_status(agent, cwd) → (status, missing)` helper in `agents/config.py`, which returns `"completed"` (output exists), `"ready"` (inputs present, no output yet), or `"blocked"` (required inputs missing). Inference extracts the section from the clicked path
 (`_section_from_path()`) and passes it to `agents_for_folder()`.
 
 **Anchoring matters**: `re.search` is used, not `re.fullmatch`. Use `^` and/or `$` anchors to
@@ -105,13 +137,13 @@ two caps). `^[A-Z]{2}$` matches only exactly 2-letter strings like `ML`.
 | Agent | `cwd_pattern` | `sections` | `add_dirs` | Folder type |
 |---|---|---|---|---|
 | product-creator | `[A-Z]{3}$` | `[PRD]` | — | PRD section folder |
-| ml-planner | `^[A-Z]{2}$` | `[IMG]` | `['../../PRD', '../../INT']` | platform subfolder |
-| ml-creator | `^[A-Z]{2}$` | `[IMG]` | `['../../PRD', '../../INT']` | platform subfolder |
+| ml-planner | `A\d+R\d+$` | `[IMG]` | `['../../../PRD', '../../../INT']` | arc subfolder in IMG/ML/ |
+| ml-creator | `A\d+R\d+$` | `[IMG]` | `['../../../PRD', '../../../INT']` | arc subfolder in IMG/ML/ |
 | research, angles | `[A-Z]{3}$` | `[INT]` | — | INT section folder |
 | arcs | `A\d+$` | `[INT]` | — | angle folder |
 | timing, hooks | `A\d+R\d+$` | `[INT]` | — | arc folder |
-| script | `A\d+R\d+H\d+$` | `[SCE]` | — | hook root |
-| storyboard, scene-specs, shots, image-prompts, image-generation, video-prompts, generated-clips, graphics | `A\d+R\d+H\d+$` | `[SCE]` | — | hook root |
+| character | `A\d+R\d+$` | `[INT]` | `['..', '../..']` | arc folder |
+| script, storyboard, scene-specs, shots, image-prompts, image-generation, video-prompts, generated-clips, graphics | `A\d+R\d+H\d+$` | `[SCE]` | — | hook root |
 
 **Agent isolation** — each agent's permission scope is its `cwd` only. `add_dirs` is the sole
 explicit exception: paths listed there are resolved to absolute paths in `ConversationSession.__init__()`
@@ -120,16 +152,51 @@ are strictly confined to their `cwd`.
 
 **Higgsfield agents require `mcp_overrides`** — listing Higgsfield tools in `allowed_tools` is
 necessary but not sufficient. The agent must also have an entry in the top-level `mcp_overrides`
-section of `agents-config.yaml` with `strict_mcp_config: true`. See `ml-creator` and
-`image-generation` for the pattern.
+section of `agents-config.yaml` with `strict_mcp_config: true`. Agents wired to Higgsfield:
+`ml-creator`, `character`, `image-generation`, `generated-clips`.
 
 **Adding a new agent**: see `agents/HOW-TO-ADD-AGENTS.md` for a step-by-step guide.
+
+### Character Sharing Across Sections
+
+The `character` agent runs in `INT/A##R##/` and produces a single approved reference image
+for the main character of that arc. The character is then propagated to both downstream sections
+automatically at promotion time:
+
+- **`promote-hook`** → copies `INT/A##/A##R##/assets/character/` into `SCE/A##R##H##/assets/character/`
+  — all hooks of the arc get the same character
+- **`promote-arc`** → copies `INT/A##/A##R##/assets/character/` into `IMG/ML/A##R##/assets/character/`
+  — ad images for that arc use the same character
+
+The `character.json` file written by the character agent includes a `higgsfield_job_id` field.
+Downstream agents pass this directly as `medias[].value` in Higgsfield API calls — no re-upload
+needed. Consuming agents:
+
+| Agent | How character is used |
+|---|---|
+| `scene-specs` | Reads `visual_identity` to write consistent subject/visual_description fields |
+| `image-prompts` | Embeds `generation_prompt` verbatim in first/last frame prompts |
+| `image-generation` | Passes `higgsfield_job_id` as reference media to `generate_image` |
+| `generated-clips` | Passes `higgsfield_job_id` as reference media to `generate_video` |
+| `ml-creator` | Passes `higgsfield_job_id` as reference media for human-model ad concepts |
+
+All character references are optional — agents check for `assets/character/character.json`
+and proceed without it if absent.
 
 ### All Agents Are WebSocket (persistent multi-turn)
 
 The WS endpoint (`/ws/agents/{name}/chat?cwd={path}&campaign={slug}`) always fires `basic_prompt`
 on connect. The agent reads its `cwd`, executes its task, then stays alive for follow-up refinements.
-No fresh/resume detection — if the agent finds existing outputs in its cwd, it adapts naturally.
+
+**WS pre-check (SCE agents)** — before opening the session the handler calls `agent_status()` and
+rejects the connection with an `{"type":"error"}` message if status is `"blocked"`. This is a
+safety net; the UI should already know the status from `GET /api/tree` or `POST /api/launch`.
+
+**SCE agent prompt structure** — every SCE agent prompt is structured in this order:
+1. **Inputs guard** — agent checks required files itself and tells the user "I shouldn't be running — missing: [files]" if anything is absent. Acts as a second safety net while the backend status system is being validated.
+2. **Resume check** — if outputs already exist, inventories them, displays `summary.md` if present, suggests the next action, and waits for instruction. Never overwrites automatically.
+3. **Task execution** — runs only if guards pass.
+4. **Summary output** — storyboard, scene-specs, shots, and video-prompts each write a `summary.md` alongside their JSON output: a few prose sentences describing what was produced, in the agent's own voice.
 
 ### Campaign Management
 
@@ -139,6 +206,18 @@ No fresh/resume detection — if the agent finds existing outputs in its cwd, it
 
 Scaffolded sections at campaign creation (hardcoded in `core/campaigns.py`):
 `PRD/`, `PRD/images/`, `IMG/`, `IMG/ML/`, `INT/`, `SCE/`
+
+**Propagating template changes to existing campaigns** — after editing `agents-config.template.yaml`
+or any file in `agents/prompts/`, run:
+```python
+# from backend/
+from agents.config import resolve_campaign_config, get_settings
+base = get_settings()["base_path"]
+for slug in ["C001", "C002"]:          # list your campaigns
+    content = resolve_campaign_config(slug, base)
+    open(f"{base}/{slug}/agents/agents-config.yaml", "w").write(content)
+```
+Then copy updated prompts: `cp agents/prompts/*.md {campaign}/agents/prompts/`
 
 ### Launching an Agent: `POST /api/launch`
 
@@ -152,16 +231,20 @@ POST /api/launch {"path": "/campaigns/C001/INT/A02"}
 **Unambiguous** (one agent matches):
 ```json
 { "ambiguous": false, "agent_id": "arcs", "agent_name": "Arc Generator",
-  "campaign": "C001", "cwd": "/campaigns/C001/INT/A02",
+  "campaign": "C001", "cwd": "/campaigns/C001/INT/A02", "status": "ready",
   "ws_url": "/ws/agents/arcs/chat?cwd=...&campaign=C001" }
 ```
 
 **Ambiguous** (multiple agents match):
 ```json
 { "ambiguous": true, "campaign": "C001", "cwd": "...",
-  "candidates": [{"id": "timing", ...}, {"id": "hooks", ...}] }
+  "candidates": [{"id": "timing", "status": "ready"}, {"id": "hooks", "status": "blocked"}, ...] }
 ```
 UI shows a picker → re-calls with `agent_id` set.
+
+Note: clicking an arc folder (`INT/A##R##/`) always shows a 3-way picker: `timing`, `hooks`, `character`.
+
+**`status`** on every agent entry: `"completed"` | `"ready"` | `"blocked"`. The UI should prevent launching a `"blocked"` agent. The WS handler enforces this as a hard stop.
 
 **Errors (400):** path not found · no agent matches · `agent_id` doesn't fit the folder.
 
@@ -170,10 +253,11 @@ UI shows a picker → re-calls with `agent_id` set.
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/api/launch` | Infer agent from path, return WS URL |
-| `GET` | `/api/tree` | Full campaign tree with `available_agents` per node |
-| `GET` | `/api/infer-agent?path=...&campaign=...` | Agents that match a folder (lightweight) |
+| `GET` | `/api/tree` | Full campaign tree; `available_agents` is `[{id, status, blocked_by}]` per node |
+| `GET` | `/api/infer-agent?path=...&campaign=...` | Agents matching a folder with `status` + `blocked_by` |
 | `GET` | `/api/agents?campaign=...` | Agent list (with `cwd_pattern`) |
-| `POST` | `/api/promote-hook` | Seed INT files into SCE/{hook_id}/ (idempotent) |
+| `POST` | `/api/promote-hook` | Seed INT files + assets/character/ into SCE/{hook_id}/ (idempotent) |
+| `POST` | `/api/promote-arc` | Seed INT files + assets/character/ into IMG/{platform}/{arc_id}/ (idempotent) |
 | `POST` | `/api/campaigns` | Create new campaign (auto C### slug) |
 | `GET` | `/api/campaigns` | List all campaigns |
 | `GET` | `/api/campaigns/{slug}` | Campaign metadata + path |
@@ -186,9 +270,9 @@ UI shows a picker → re-calls with `agent_id` set.
 
 - `agents/agents-config.template.yaml` — source of truth for agent definitions; versioned with the app
 - `agents/HOW-TO-ADD-AGENTS.md` — step-by-step guide for adding new agents or sections
-- `agents/config.py` — `AgentConfig` dataclass, `load_config()`, `resolve_campaign_config()`, `agents_for_folder()`
+- `agents/config.py` — `AgentConfig` dataclass (`required_inputs`, `output_check` fields), `agent_status()`, `load_config()`, `resolve_campaign_config()`, `agents_for_folder()`
 - `agents/conversation_agent.py` — `ConversationSession` wraps `ClaudeSDKClient`; resolves `add_dirs` and passes `--add-dir` flags
 - `agents/prompts/` — app-level stub prompts copied into each new campaign's `agents/prompts/`
 - `core/campaigns.py` — campaign CRUD, auto slug generation, folder scaffold (hardcoded section list)
-- `core/promotions.py` — `promote_hook()`: copies INT files into a flat `SCE/{hook_id}/` folder
-- `routers/agents.py` — REST + WS handlers, tree builder, infer-agent, promote-hook endpoints
+- `core/promotions.py` — `promote_hook()` and `promote_arc()`: copy INT files and `assets/character/` into SCE and IMG respectively
+- `routers/agents.py` — REST + WS handlers, tree builder, infer-agent, promote-hook, promote-arc endpoints

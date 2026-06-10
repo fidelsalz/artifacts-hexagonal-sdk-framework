@@ -208,6 +208,37 @@ team:
       max_concurrent:  1
       sections:        [INT]
 
+    character:
+      id:              "character"
+      name:            "Character Designer"
+      role:            "Designs and generates an approved reference image of the main character; shared across all hooks and ad images for this arc"
+      comm_type:       ws
+      cwd_pattern:     'A\d+R\d+$'
+      prompt_file:     "{campaign_dir}/agents/prompts/character.md"
+      basic_prompt: >-
+        Your working directory is {cwd}.
+        Read your instructions at {prompt_file}.
+        Begin immediately — read the context files in your cwd and greet the user
+        with a proposed character profile. Do not generate an image until the profile is confirmed.
+      model:           *model
+      permission_mode: *dontask_mode
+      allowed_tools:
+        - Read
+        - Write
+        - Edit
+        - Glob
+        - Bash
+        - mcp__claude_ai_higgsfield__generate_image
+        - mcp__claude_ai_higgsfield__job_status
+        - mcp__claude_ai_higgsfield__job_display
+        - mcp__claude_ai_higgsfield__models_explore
+        - mcp__claude_ai_higgsfield__balance
+        - mcp__claude_ai_higgsfield__show_generations
+        - mcp__claude_ai_higgsfield__show_plans_and_credits
+      max_concurrent:  1
+      sections:        [INT]
+      add_dirs:        ["..", "../.."]
+
     script:
       id:              "script"
       name:            "Script Writer"
@@ -221,6 +252,12 @@ team:
       allowed_tools:   *write_tools
       max_concurrent:  1
       sections:        [SCE]
+      required_inputs:
+        - path: "timing-blueprint.json"
+          produced_by: "promote-hook"
+        - path: "A*H*.md"
+          produced_by: "promote-hook"
+      output_check: "script/script.json"
 
     storyboard:
       id:              "storyboard"
@@ -235,6 +272,10 @@ team:
       allowed_tools:   *write_tools
       max_concurrent:  1
       sections:        [SCE]
+      required_inputs:
+        - path: "script/script.json"
+          produced_by: "script"
+      output_check: "storyboard/storyboard.json"
 
     scene-specs:
       id:              "scene-specs"
@@ -249,6 +290,12 @@ team:
       allowed_tools:   *write_tools
       max_concurrent:  1
       sections:        [SCE]
+      required_inputs:
+        - path: "storyboard/storyboard.json"
+          produced_by: "storyboard"
+        - path: "script/script.json"
+          produced_by: "script"
+      output_check: "scene-specs/scene-specs.json"
 
     shots:
       id:              "shots"
@@ -263,6 +310,10 @@ team:
       allowed_tools:   *write_tools
       max_concurrent:  1
       sections:        [SCE]
+      required_inputs:
+        - path: "scene-specs/scene-specs.json"
+          produced_by: "scene-specs"
+      output_check: "shots/shots.json"
 
     image-prompts:
       id:              "image-prompts"
@@ -277,6 +328,12 @@ team:
       allowed_tools:   *write_tools
       max_concurrent:  1
       sections:        [SCE]
+      required_inputs:
+        - path: "shots/shots.json"
+          produced_by: "shots"
+        - path: "scene-specs/scene-specs.json"
+          produced_by: "scene-specs"
+      output_check: "image-prompts/image-prompts.json"
 
     image-generation:
       id:              "image-generation"
@@ -288,6 +345,10 @@ team:
       basic_prompt:    *basic_prompt
       model:           *model
       permission_mode: *dontask_mode
+      required_inputs:
+        - path: "image-prompts/image-prompts.json"
+          produced_by: "image-prompts"
+      output_check: "image-generation/*/approved/*.json"
       allowed_tools:
         - Read
         - Write
@@ -303,6 +364,8 @@ team:
         - mcp__claude_ai_higgsfield__list_workspaces
         - mcp__claude_ai_higgsfield__select_workspace
         - mcp__claude_ai_higgsfield__show_plans_and_credits
+        - mcp__claude_ai_higgsfield__media_upload
+        - mcp__claude_ai_higgsfield__media_confirm
       max_concurrent:  1
       sections:        [SCE]
 
@@ -319,6 +382,12 @@ team:
       allowed_tools:   *write_tools
       max_concurrent:  1
       sections:        [SCE]
+      required_inputs:
+        - path: "shots/shots.json"
+          produced_by: "shots"
+        - path: "image-generation/*/approved/*.json"
+          produced_by: "image-generation"
+      output_check: "video-prompts/*/approved/*.json"
 
     generated-clips:
       id:              "generated-clips"
@@ -330,7 +399,23 @@ team:
       basic_prompt:    *basic_prompt
       model:           *model
       permission_mode: *dontask_mode
-      allowed_tools:   *write_tools
+      required_inputs:
+        - path: "video-prompts/*/approved/*.json"
+          produced_by: "video-prompts"
+      output_check: "generated-clips/*/approved/*.json"
+      allowed_tools:
+        - Read
+        - Write
+        - Bash
+        - Glob
+        - mcp__claude_ai_higgsfield__generate_video
+        - mcp__claude_ai_higgsfield__job_status
+        - mcp__claude_ai_higgsfield__job_display
+        - mcp__claude_ai_higgsfield__models_explore
+        - mcp__claude_ai_higgsfield__balance
+        - mcp__claude_ai_higgsfield__show_plans_and_credits
+        - mcp__claude_ai_higgsfield__media_upload
+        - mcp__claude_ai_higgsfield__media_confirm
       max_concurrent:  1
       sections:        [SCE]
 
@@ -347,6 +432,12 @@ team:
       allowed_tools:   *write_tools
       max_concurrent:  1
       sections:        [SCE]
+      required_inputs:
+        - path: "script/script.json"
+          produced_by: "script"
+        - path: "scene-specs/scene-specs.json"
+          produced_by: "scene-specs"
+      output_check: "graphics/graphics-plan.json"
 
 # =============================================================================
 # MCP OVERRIDES — per-agent MCP server configuration
@@ -364,7 +455,21 @@ mcp_overrides:
         type: http
         url: "https://mcp.higgsfield.ai/mcp"
 
+  character:
+    strict_mcp_config: true
+    mcp_servers:
+      "claude.ai higgsfield":
+        type: http
+        url: "https://mcp.higgsfield.ai/mcp"
+
   image-generation:
+    strict_mcp_config: true
+    mcp_servers:
+      "claude.ai higgsfield":
+        type: http
+        url: "https://mcp.higgsfield.ai/mcp"
+
+  generated-clips:
     strict_mcp_config: true
     mcp_servers:
       "claude.ai higgsfield":

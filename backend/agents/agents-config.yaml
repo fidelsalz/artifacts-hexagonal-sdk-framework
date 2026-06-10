@@ -6,11 +6,13 @@
 # YAML anchors (&/*)  are used for full-node reuse only (tools, model, etc.)
 # =============================================================================
 
+
 # ===== BASE PATHS (change once) ===============================================
 config:
   base_path: "/home/fidel/Developer/ecommerce/scecomm"
   code_base:  "{{ base_path }}/backend/src"
-  case_dir:   "{{ base_path }}/tools/AgenticFramework/cases/Case-006_nfe-xml-endpoints/"
+  case_dir:   "{{ base_path }}/tools/AgenticFramework/cases/Case-006_nfe-xml-endpoints/"  
+ 
 
 # ===== SHARED DEFAULTS ========================================================
 _defaults:
@@ -18,7 +20,17 @@ _defaults:
   model:           &model           "claude-sonnet-4-6"
   lightmodel:      &lightmodel      "claude-haiku-4-5-20251001"
   permission_mode: &permission_mode "acceptEdits"
-  dontask_mode: &dontask_mode "dontAsk"
+  dontask_mode:    &dontask_mode    "dontAsk"
+
+  coding_agent_basic_prompt: &coding_agent_basic_prompt >-
+    Your cwd is {{ cwd }} and your coding dir is {{ coding_dir }}.
+    Read your prompt at {{ prompt_file }}.
+    Proceed immediately and complete all tasks autonomously. Never ask for confirmation or clarification.
+
+  validator_basic_prompt: &validator_basic_prompt >-
+    Your cwd is {{ cwd }}.
+    Read your prompt at {{ prompt_file }}.
+    Proceed immediately and complete all tasks autonomously. Never ask for confirmation or clarification.
 
   tools:
     coding: &coding_tools
@@ -92,17 +104,23 @@ team:
       coding_dir:     "{{ code_base }}/hexagon"
       work_dir:       "{{ case_dir }}/2-hexagon/work"
       prompt_file:    "{{ case_dir }}/2-hexagon/prompt/hexagon-prompt.md"
-      basic_prompt:   "read your prompt in your cwd in prompt/hexagon-prompt.md     Then Proceed immediately and complete all tasks autonomously. Never ask for confirmation or clarification."
+      basic_prompt:   *coding_agent_basic_prompt
       model:           *lightmodel
       permission_mode: *dontask_mode
       allowed_tools:   *coding_tools
+      in_sources:
+        - source: "{{ case_dir }}/0-human/out"
+          files: ["00_CONTEXT.md", "3_DATA_SOURCES.md", "5_MAPPING_CONTRACT.csv", "6_CONSTRAINTS.md"]
+        - source: "{{ case_dir }}/1-contracts-writer/out"
+          files: ["7_PORTS_SPEC.yaml", "8_DOMAIN_EXCEPTIONS.yaml",
+                  "9_EXECUTION_POLICY.yaml", "11x_COMPLETENESS_HEXAGONAL.yaml"]
       validator:
         id:             "hexagon-validator"
         name:           "Hexagon Validator"
         role:           "Validates domain logic correctness and entity invariants"
         cwd:            "{{ case_dir }}/2-hexagon"
         prompt_file:    "{{ case_dir }}/2-hexagon/prompt/hexagon-validator-prompt.md"
-        basic_prompt:   "read your prompt at cwd/prompt/hexagon-validator-prompt.md  Then Proceed immediately and complete all tasks autonomously. Never ask for confirmation or clarification."
+        basic_prompt:   *validator_basic_prompt
         model:           *lightmodel
         permission_mode: *permission_mode
         allowed_tools:   *validator_tools
@@ -119,17 +137,23 @@ team:
       coding_dir:     "{{ code_base }}/ports"
       work_dir:       "{{ case_dir }}/3-ports/work"
       prompt_file:    "{{ case_dir }}/3-ports/prompt/ports-prompt.md"
-      basic_prompt:   " read ports-prompt.md in your prompt/ cwd folder. Then Proceed immediately and complete all tasks autonomously. Never ask for confirmation or clarification."
+      basic_prompt:   *coding_agent_basic_prompt
       model:           *lightmodel
       permission_mode: *dontask_mode
       allowed_tools:   *coding_tools
+      in_sources:
+        - source: "{{ case_dir }}/0-human/out"
+          files: ["00_CONTEXT.md", "6_CONSTRAINTS.md"]
+        - source: "{{ case_dir }}/1-contracts-writer/out"
+          files: ["7_PORTS_SPEC.yaml", "8_DOMAIN_EXCEPTIONS.yaml",
+                  "9_EXECUTION_POLICY.yaml", "11p_COMPLETENESS_PORTS.yaml"]
       validator:
         id:             "ports-validator"
         name:           "Ports Validator"
         role:           "Validates port interface definitions against contracts"
         cwd:            "{{ case_dir }}/3-ports"
         prompt_file:    "{{ case_dir }}/3-ports/prompt/ports-validator-prompt.md"
-        basic_prompt:   "read ports-validator-prompt.md in your prompt/ cwd folder. Then Proceed immediately and complete all tasks autonomously. Never ask for confirmation or clarification. "
+        basic_prompt:   *validator_basic_prompt
         model:           *lightmodel
         permission_mode: *permission_mode
         allowed_tools:   *validator_tools
@@ -146,17 +170,23 @@ team:
       coding_dir:     "{{ code_base }}/adapters"
       work_dir:       "{{ case_dir }}/4-adapters/work"
       prompt_file:    "{{ case_dir }}/4-adapters/prompt/adapters-prompt.md"
-      basic_prompt:   "read your prompt at cwd/prompt/adapters-prompt.md  Then Proceed immediately and complete all tasks autonomously. Never ask for confirmation or clarification."
+      basic_prompt:   *coding_agent_basic_prompt
       model:           *lightmodel
       permission_mode: *dontask_mode
       allowed_tools:   *coding_tools
+      in_sources:
+        - source: "{{ case_dir }}/0-human/out"
+          files: ["00_CONTEXT.md", "3_DATA_SOURCES.md", "5_MAPPING_CONTRACT.csv", "6_CONSTRAINTS.md"]
+        - source: "{{ case_dir }}/1-contracts-writer/out"
+          files: ["7_PORTS_SPEC.yaml", "8_DOMAIN_EXCEPTIONS.yaml",
+                  "9_EXECUTION_POLICY.yaml", "11a_COMPLETENESS_ADAPTERS.yaml"]
       validator:
         id:             "adapters-validator"
         name:           "Adapters Validator"
         role:           "Validates adapter implementations against port contracts"
         cwd:            "{{ case_dir }}/4-adapters"
         prompt_file:    "{{ case_dir }}/4-adapters/prompt/adapters-validator-prompt.md"
-        basic_prompt:   "read adapters-validator-prompt.md in your prompt/ cwd folder. Then Proceed immediately and complete all tasks autonomously. Never ask for confirmation or clarification."
+        basic_prompt:   *validator_basic_prompt
         model:           *lightmodel
         permission_mode: *permission_mode
         allowed_tools:   *validator_tools
@@ -173,17 +203,22 @@ team:
       coding_dir:     "{{ code_base }}/infrastructure"
       work_dir:       "{{ case_dir }}/5-infra/work"
       prompt_file:    "{{ case_dir }}/5-infra/prompt/infra-prompt.md"
-      basic_prompt:   "read your prompt at cwd/prompt/infra-prompt.md.  Then Proceed immediately and complete all tasks autonomously. Never ask for confirmation or clarification. "
+      basic_prompt:   *coding_agent_basic_prompt
       model:           *lightmodel
       permission_mode: *dontask_mode
       allowed_tools:   *coding_tools
+      in_sources:
+        - source: "{{ case_dir }}/0-human/out"
+          files: ["00_CONTEXT.md","6_CONSTRAINTS.md"]
+        - source: "{{ case_dir }}/1-contracts-writer/out"
+          files: ["7_PORTS_SPEC.yaml", "11i_COMPLETENESS_INFRA.yaml"]
       validator:
         id:             "infra-validator"
         name:           "Infrastructure Validator"
         role:           "Validates infrastructure implementations and integrations"
         cwd:            "{{ case_dir }}/5-infra"
         prompt_file:    "{{ case_dir }}/5-infra/prompt/infra-validator-prompt.md"
-        basic_prompt:   "read your prompt at cwd/prompt/infra-validator-prompt.md and follow instructions"
+        basic_prompt:   *validator_basic_prompt
         model:           *lightmodel
         permission_mode: *permission_mode
         allowed_tools:   *validator_tools

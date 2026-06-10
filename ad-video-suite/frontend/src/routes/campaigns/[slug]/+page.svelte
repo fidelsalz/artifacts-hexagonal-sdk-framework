@@ -6,7 +6,7 @@
 	import CampaignTree from '$lib/components/CampaignTree.svelte';
 	import FileViewer from '$lib/components/FileViewer.svelte';
 	import { closeAllSessions, sessionStore } from '$lib/stores/sessionStore.svelte';
-	import type { AgentCandidate, CampaignData, TreeNodeData } from '$lib/types';
+	import type { AgentCandidate, AgentStatus, CampaignData, TreeNodeData } from '$lib/types';
 	import { onMount } from 'svelte';
 
 	const slug = page.params.slug ?? '';
@@ -66,7 +66,7 @@
 			// Default selection: campaign root folder
 			if (campaign && treeNode) {
 				selectedFolder = campaign.path;
-				selectedFolderAgents = treeNode.available_agents.map((id) => ({ id, name: id, role: '' }));
+				selectedFolderAgents = normalizeAgents(treeNode.available_agents);
 			}
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
@@ -85,8 +85,24 @@
 		selectedFile = path;
 		// Sync agents panel to the folder that owns this file
 		selectedFolder = parentNode.path;
-		selectedFolderAgents = parentNode.available_agents.map((id) => ({ id, name: id, role: '' }));
+		selectedFolderAgents = normalizeAgents(parentNode.available_agents);
 		fileSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+	}
+
+	// Backend root node returns string[] for available_agents; children return TreeAgentRef[].
+	// This normalizes both so AgentLauncher always gets consistent AgentCandidate objects.
+	function normalizeAgents(raw: unknown[]): AgentCandidate[] {
+		return raw.map((a) =>
+			typeof a === 'string'
+				? { id: a, name: a, role: '', status: 'ready' as AgentStatus, blocked_by: [] }
+				: {
+						id: (a as { id: string }).id,
+						name: (a as { id: string }).id,
+						role: '',
+						status: (a as { status: AgentStatus }).status ?? 'ready',
+						blocked_by: (a as { blocked_by: string[] }).blocked_by ?? [],
+					}
+		);
 	}
 
 	function handleSessionLaunched(_key: string) {

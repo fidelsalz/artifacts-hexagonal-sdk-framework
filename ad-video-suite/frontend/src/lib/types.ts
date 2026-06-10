@@ -1,7 +1,15 @@
+export type AgentStatus = 'completed' | 'ready' | 'blocked';
+
+export type TreeAgentRef = {
+	id: string;
+	status: AgentStatus;
+	blocked_by: string[];
+};
+
 export type TreeNodeData = {
 	name: string;
 	path: string;
-	available_agents: string[];
+	available_agents: TreeAgentRef[];
 	children: TreeNodeData[];
 };
 
@@ -9,6 +17,8 @@ export type AgentCandidate = {
 	id: string;
 	name: string;
 	role: string;
+	status?: AgentStatus;
+	blocked_by?: string[];
 };
 
 export type FileEntry = {

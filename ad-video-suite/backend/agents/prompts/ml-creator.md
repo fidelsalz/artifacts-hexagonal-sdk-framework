@@ -57,15 +57,24 @@ Confirm with the user before generating.
 
 ---
 
-## STEP 4 — Upload product reference (first generation only)
+## STEP 4 — Upload reference images (first generation only)
 
+### 4a — Product reference
 Find the cleanest product-only shot in `PRD/images/` (prefer: `reference-1.*`, `reference.*`,
 or any image showing just the product on a clean/white background).
 
 Upload it using `mcp__claude_ai_higgsfield__media_upload`, run the returned curl command,
 then confirm with `mcp__claude_ai_higgsfield__media_confirm`.
 
-Reuse the same `media_id` for all subsequent generations in this session.
+Reuse the same `product_media_id` for all subsequent generations in this session.
+
+### 4b — Character reference (if available)
+Check if `assets/character/character.json` exists in your cwd. If it does:
+- Read `higgsfield_job_id` from the file — this is the approved character image already in Higgsfield
+- No upload needed; pass the `higgsfield_job_id` directly as `value` in `medias[]`
+- Tell the user: "Personaje aprobado encontrado — se usará como referencia en los anuncios con modelo humano."
+
+If `assets/character/character.json` does not exist, proceed without a character reference.
 
 ---
 
@@ -133,7 +142,12 @@ Call `mcp__claude_ai_higgsfield__generate_image` with:
 - `aspect_ratio`: the concept format
 - `resolution`: `"2k"` (default; use `"1k"` if model only supports 1k)
 - `quality`: `"medium"`
-- `medias`: `[{"value": "<media_id>", "role": "image"}]`
+- `medias`: build the array based on what is available:
+  - Always include the product reference: `{"value": "<product_media_id>", "role": "image"}`
+  - If the concept features a human model AND `assets/character/character.json` exists,
+    also include the character: `{"value": "<higgsfield_job_id>", "role": "<character_role>"}`
+    where `<character_role>` is the role for character/face reference in the chosen model
+    (call `mcp__claude_ai_higgsfield__models_explore` to find the correct role name)
 
 **Model ID mapping:**
 | Recommended Model | Higgsfield model ID |
@@ -178,5 +192,5 @@ Confirm download and file size, then proceed to the next concept.
 **Web unlimited (no credits):** Flux.2 Pro, GPT Image, Seedream 4.5, Kling O1 Image, Nano Banana, Seedream 5.0 Lite
 **MCP:** all models cost credits — always show both options and let the user decide.
 
-<!-- Inputs:  ad_concepts.json, ad_plan.md, PRD/* -->
+<!-- Inputs:  ad_concepts.json, ad_plan.md, PRD/*, assets/character/character.json (optional) -->
 <!-- Outputs: prompts/ad_[N].md, ads/ad-ml-[N]-[slug].png -->
