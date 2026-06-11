@@ -19,7 +19,7 @@ Required:
 ---
 
 All prompt decisions were made upstream. Your job is execution and state management only:
-read the approved prompt, call Higgsfield, track the result, report to the user.
+read the approved prompt, call Higgsfield via CLI, track the result, report to the user.
 
 ---
 
@@ -66,27 +66,54 @@ generated-clips/
 
 ---
 
-## Calling Higgsfield
+## Calling Higgsfield CLI
 
-For each shot, build the `generate_video` call from the approved prompt JSON:
+For each shot, build the CLI command from the approved prompt JSON:
 
-1. `motion_prompt` → `motion_prompt` field
-2. `model` → model field (default `kling3_0` if not specified in the prompt)
+1. `motion_prompt` → `--prompt`
+2. `model` → the job_set_type (default `kling3_0` if not specified in the prompt)
 3. **Duration** — resolve `duration_s` against the model's allowed values:
-   - `kling_2_5_turbo`: fixed durations **5 or 10** only. Round `duration_s` to whichever is closer (≤7 → 5, >7 → 10).
-   - All other models: pass `duration_s` directly.
-4. `medias[]` array — resolve supported roles before building:
-   - For `kling_2_5_turbo`: roles are **`start_image` + `end_image`** (confirmed on site; model is absent from `models_explore` — do not look it up, use these roles directly).
-   - For all other models: check `models_explore` for accepted roles, then apply the rules below.
+   - `kling_2_5_turbo`: fixed durations **5 or 10** only. Round to whichever is closer (≤7 → 5, >7 → 10).
+   - All other models: pass `duration_s` directly as `--duration`.
+4. **Media flags** — use the appropriate CLI flag for each reference:
+   - `--start-image <first_frame_job_id>` — always (the first-frame keyframe)
+   - `--end-image <last_frame_job_id>` — only if the model accepts it **AND** `last_frame_job_id` is non-null
+   - `--image <character_reference_job_id>` — only if `character_reference_job_id` is non-null
 
-   Media entries to include:
-   - `{"value": "<first_frame_job_id>", "role": "start_image"}` — always
-   - `{"value": "<last_frame_job_id>", "role": "end_image"}` — only if the model accepts `end_image` **AND** `last_frame_job_id` is non-null
-   - `{"value": "<character_reference_job_id>", "role": "<character_role>"}` — only if
-     `character_reference_job_id` is non-null; inspect `models_explore` for the exact role name
+   Run `higgsfield model get <jst>` to check which media flags the model accepts before building
+   the command. Each flag accepts a UUID (job ID) directly — no re-upload needed.
 
-After submitting, poll with `job_status` or `job_display` until complete, then save the
-`higgsfield_job_id`, `status`, and `video_url` into the attempt JSON.
+5. **Build and run the command**:
+   ```bash
+   higgsfield generate create <model> \
+     --prompt "<motion_prompt>" \
+     --duration <duration_s> \
+     --aspect_ratio "9:16" \
+     --start-image <first_frame_job_id> \
+     [--end-image <last_frame_job_id>]          # if model accepts it and value is non-null
+     [--image <character_reference_job_id>]     # if non-null
+     --wait --json
+   ```
+   `--wait` blocks until the job completes and prints the final job object.
+   Capture `id` (job_id) and `result_url` from the JSON output.
+
+6. Write the attempt JSON to `generated-clips/{shot_id}/attempts/attempt-{###}.json`:
+   ```json
+   {
+     "attempt": "001",
+     "shot_id": "SH001",
+     "source_prompt_attempt": "attempt-001",
+     "model": "seedance_2_0",
+     "higgsfield_job_id": "<id from CLI output>",
+     "status": "completed",
+     "video_url": "<result_url from CLI output>"
+   }
+   ```
+
+7. Report the result:
+   ```
+   SH001 — completed: <video_url>
+   ```
 
 ---
 
@@ -99,11 +126,11 @@ After submitting, poll with `job_status` or `job_display` until complete, then s
 2. Report to the user:
    - Shot list with model and duration for each
    - Which shots have a `character_reference_job_id`
-   - Estimated credit cost if known
+   - Run `higgsfield account status` to check available credits if needed
 3. **Wait for explicit user confirmation before generating anything.** Do not start generation automatically even if the model is already specified in the prompt files.
 4. After confirmation, ask the user whether to generate all shots at once or one at a time. Default to one at a time.
 5. Create the folder tree and generate clips for the chosen shots.
-6. After each job completes, report the result and ask the user to approve or disapprove before continuing to the next shot.
+6. After each job completes, report the video URL and ask the user to approve or disapprove before continuing to the next shot.
 
 ---
 
@@ -126,7 +153,7 @@ After submitting, poll with `job_status` or `job_display` until complete, then s
    ```
 
 3. Ask the user what to do:
-   - Generate a new attempt for a specific shot (re-call Higgsfield with the same approved prompt)
+   - Generate a new attempt for a specific shot (re-call Higgsfield CLI with the same approved prompt)
    - Generate all unapproved shots
    - Approve or disapprove a specific attempt (user moves the file; you confirm the new state)
 

@@ -169,10 +169,10 @@ explicit exception: paths listed there are resolved to absolute paths in `Conver
 and passed as `--add-dir` CLI flags to `ClaudeAgentOptions`. Agents that declare no `add_dirs`
 are strictly confined to their `cwd`.
 
-**Higgsfield agents require `mcp_overrides`** — listing Higgsfield tools in `allowed_tools` is
-necessary but not sufficient. The agent must also have an entry in the top-level `mcp_overrides`
-section of `agents-config.yaml` with `strict_mcp_config: true`. Agents wired to Higgsfield:
-`ml-creator`, `character`, `image-generation`, `generated-clips`.
+**Higgsfield agents use the CLI** — `character`, `ml-creator`, `image-generation`, and
+`generated-clips` call Higgsfield via the `higgsfield` CLI (`Bash` tool). No MCP server or
+`mcp_overrides` entry is needed. The CLI must be installed and authenticated (`higgsfield auth login`)
+on the host running the backend.
 
 **Adding a new agent**: see `agents/HOW-TO-ADD-AGENTS.md` for a step-by-step guide.
 
@@ -188,16 +188,16 @@ automatically at promotion time:
   — ad images for that arc use the same character
 
 The `character.json` file written by the character agent includes a `higgsfield_job_id` field.
-Downstream agents pass this directly as `medias[].value` in Higgsfield API calls — no re-upload
-needed. Consuming agents:
+Downstream agents pass this directly as `--image <higgsfield_job_id>` in CLI calls — no
+re-upload needed. Consuming agents:
 
 | Agent | How character is used |
 |---|---|
 | `scene-specs` | Reads `visual_identity` to write consistent subject/visual_description fields |
 | `image-prompts` | Embeds `generation_prompt` verbatim in first/last frame prompts |
-| `image-generation` | Passes `higgsfield_job_id` as reference media to `generate_image` |
-| `generated-clips` | Passes `higgsfield_job_id` as reference media to `generate_video` |
-| `ml-creator` | Passes `higgsfield_job_id` as reference media for human-model ad concepts |
+| `image-generation` | Passes `higgsfield_job_id` as `--image` reference to `generate create` |
+| `generated-clips` | Passes `higgsfield_job_id` as `--image` reference to `generate create` |
+| `ml-creator` | Passes `higgsfield_job_id` as `--image` reference for human-model ad concepts |
 
 All character references are optional — agents check for `assets/character/character.json`
 and proceed without it if absent.

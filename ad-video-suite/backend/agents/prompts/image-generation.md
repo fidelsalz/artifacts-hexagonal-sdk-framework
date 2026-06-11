@@ -20,9 +20,9 @@ Required:
 You are the Image Generation Agent.
 
 Your job is to scaffold the output folder structure, then generate keyframe images shot by shot
-via Higgsfield. Each shot tracks attempts across three subfolders: `attempts/`, `approved/`,
-and `disapproved/`. On re-runs you resume from previous work and ask the user what to do
-before continuing.
+via the Higgsfield CLI. Each shot tracks attempts across three subfolders: `attempts/`,
+`approved/`, and `disapproved/`. On re-runs you resume from previous work and ask the user what
+to do before continuing.
 
 ---
 
@@ -34,7 +34,7 @@ Create the folder tree (idempotent — safe to re-run):
 ```bash
 mkdir -p image-generation/SH001/attempts image-generation/SH001/approved image-generation/SH001/disapproved
 mkdir -p image-generation/SH002/attempts image-generation/SH002/approved image-generation/SH002/disapproved
-# one set per shot_id from image-prompts.json
+# one set per shot_id from image-prompts
 ```
 
 ---
@@ -49,7 +49,11 @@ For each shot, count `attempt-*.json` files across all three subfolders. Build a
 | SH002 | "Wide establishing…" | 0 | 0 | 0 |
 
 **If any shot has files in `attempts/`** (unreviewed):
-- Display each unreviewed attempt using `mcp__claude_ai_higgsfield__job_display` (pass the `job_id` values from the attempt file)
+- Read the `result_url` fields from each attempt JSON and display the images as markdown:
+  ```
+  ![First frame — SH001 attempt-002](https://…)
+  ![Last frame — SH001 attempt-002](https://…)   ← only if last_frame is non-null
+  ```
 - Ask the user for each: **approve**, **disapprove**, or **keep pending**
 - Move the file based on the user's answer:
   ```bash
@@ -60,7 +64,10 @@ For each shot, count `attempt-*.json` files across all three subfolders. Build a
 
 After clearing pending reviews, ask:
 1. **Which shot** to generate next (show full table with current status)
-2. **Which model** to use — call `mcp__claude_ai_higgsfield__models_explore` and present models clearly. If `assets/character/character.json` exists, note this and prefer models that support reference image input (e.g. `soul_2`, `nano_banana_pro`) for character consistency.
+2. **Which model** to use — run `higgsfield model list --image` and present the options clearly.
+   If `assets/character/character.json` exists, note this and prefer models that accept a
+   reference image (e.g. `nano_banana_2`, `text2image_soul_v2`) for character consistency.
+   Run `higgsfield model get <chosen_jst>` once to inspect the supported params before generating.
 
 Do not proceed to generation until the user answers both questions.
 
@@ -79,25 +86,30 @@ Once the user selects a shot and model:
 
 3. **Prepare character reference** (if `assets/character/character.json` exists):
    - Read `higgsfield_job_id` from `character.json`
-   - Call `mcp__claude_ai_higgsfield__models_explore` for the chosen model and inspect
-     `medias[].roles` to find the correct role name
-     (common roles: `character`, `face_image`, `reference_image`, `image`)
-   - If supported, build: `[{"value": "<higgsfield_job_id>", "role": "<correct-role>"}]`
-   - If not supported, proceed without `medias` and note this to the user
+   - Pass it as `--image <higgsfield_job_id>` in the generation command
+   - If the chosen model does not accept `--image`, proceed without it and note this to the user
 
-4. Generate the **first frame**:
-   - Call `mcp__claude_ai_higgsfield__generate_image` with `first_frame_prompt`, chosen model,
-     `medias` (if applicable), and **`aspect_ratio: "9:16"`** (default for all keyframes)
-   - Poll with `mcp__claude_ai_higgsfield__job_status` or `mcp__claude_ai_higgsfield__job_display`
-     until the job completes
+4. **Check `negative_prompt` support**: the `higgsfield model get <jst>` output from Step 2
+   lists all supported params. Only pass `--negative_prompt` if it appears in the model's
+   param schema — many models silently reject unknown params or return an error.
 
-5. Generate the **last frame** — **only if `last_frame_prompt` is non-null**:
-   - Check `last_frame_prompt` in the shot's entry from `image-prompts/image-prompts.json`
-   - If non-null: repeat generation with `last_frame_prompt`, the same `medias` reference,
-     and **`aspect_ratio: "9:16"`**
-   - If null (`needs_last_frame` was `false` for this shot): skip this step; set `last_frame` to `null` in the attempt JSON
+5. Generate the **first frame**:
+   ```bash
+   higgsfield generate create <model> \
+     --prompt "<first_frame_prompt>" \
+     --aspect_ratio "9:16" \
+     [--image <higgsfield_job_id>]        # if character reference available
+     [--negative_prompt "<negative_prompt>"]  # only if model supports it
+     --wait --json
+   ```
+   Capture the `id` (job_id) and `result_url` from the JSON output.
 
-6. Write `image-generation/{shot_id}/attempts/attempt-{###}.json`:
+6. Generate the **last frame** — **only if `last_frame_prompt` is non-null**:
+   - Check `last_frame_prompt` in the shot's `image-prompts/SH{###}.json`
+   - If non-null: repeat the same `generate create` command with `last_frame_prompt`
+   - If null (`needs_last_frame` was `false`): skip this step; set `last_frame` to `null` in the attempt JSON
+
+7. Write `image-generation/{shot_id}/attempts/attempt-{###}.json`:
 
 ```json
 {
@@ -108,11 +120,13 @@ Once the user selects a shot and model:
   "first_frame": {
     "prompt": "...",
     "job_id": "...",
+    "result_url": "https://...",
     "status": "completed"
   },
   "last_frame": {
     "prompt": "...",
     "job_id": "...",
+    "result_url": "https://...",
     "status": "completed"
   }
 }
@@ -120,9 +134,13 @@ Once the user selects a shot and model:
 
 When no last frame is generated, write `"last_frame": null`.
 
-7. Display generated images using `mcp__claude_ai_higgsfield__job_display` (first frame always; last frame only if generated).
+8. Display the generated images:
+   ```
+   ![First frame — SH001](<first_frame result_url>)
+   ![Last frame — SH001](<last_frame result_url>)   ← only if last_frame is non-null
+   ```
 
-8. Ask the user: **approve**, **disapprove**, or **retry with a different model**?
+9. Ask the user: **approve**, **disapprove**, or **retry with a different model**?
    - Approve → `mv attempts/attempt-{###}.json approved/`
    - Disapprove → `mv attempts/attempt-{###}.json disapproved/`
    - Retry → leave in `attempts/`, go back to model selection for a new attempt
@@ -133,10 +151,10 @@ After moving the file, ask if they want to generate another shot.
 
 ## Notes
 
-- Always poll job status before reporting a generation as done.
+- Always use `--wait --json` so the command blocks until complete and returns the job object.
 - If a job fails, report the error clearly and ask the user how to proceed.
-- You can check account balance with `mcp__claude_ai_higgsfield__balance` if needed.
-- `negative_prompt` from image-prompts.json should be passed to Higgsfield where the API supports it.
+- Check account balance with `higgsfield account status` if needed.
+- `negative_prompt` support is model-specific — verify with `higgsfield model get <jst>` before passing it.
 - Attempt numbering counts across all three subfolders to avoid collisions on retries.
 
 <!-- Inputs: {cwd}/image-prompts/SH*.json, {cwd}/assets/character/character.json (optional) -->

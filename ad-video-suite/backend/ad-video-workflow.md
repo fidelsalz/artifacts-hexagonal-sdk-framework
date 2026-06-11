@@ -164,15 +164,16 @@ The `character` agent runs in `INT/A##R##/`. It produces a single approved refer
 }
 ```
 
-Downstream consuming agents use `higgsfield_job_id` directly — no re-upload needed:
+Downstream consuming agents pass `higgsfield_job_id` directly as `--image <job_id>` in CLI
+calls — no re-upload needed:
 
 | Agent | How character is used |
 |---|---|
 | `scene-specs` | Embeds `visual_identity` in `subject` / `visual_description` fields |
 | `image-prompts` | Embeds `generation_prompt` in first/last frame prompts |
-| `image-generation` | Passes `higgsfield_job_id` as reference media to `generate_image` |
-| `generated-clips` | Passes `higgsfield_job_id` as reference media to `generate_video` |
-| `ml-creator` | Passes `higgsfield_job_id` as reference media for human-model ad concepts |
+| `image-generation` | Passes `higgsfield_job_id` as `--image` to `higgsfield generate create` |
+| `generated-clips` | Passes `higgsfield_job_id` as `--image` to `higgsfield generate create` |
+| `ml-creator` | Passes `higgsfield_job_id` as `--image` for human-model ad concepts |
 
 All character references are optional — agents check for the file and proceed without it if absent.
 
@@ -310,16 +311,14 @@ flowchart TD
 
 ## Higgsfield Agents
 
-Four agents call Higgsfield directly:
+Four agents call Higgsfield directly via the `higgsfield` CLI (`Bash` tool). No MCP server needed — CLI must be installed and authenticated on the host.
 
-| Agent | Higgsfield call | Reference media |
+| Agent | CLI command | Reference media |
 |---|---|---|
-| `character` | `generate_image` | — (portrait generation) |
-| `ml-creator` | `generate_image` | `higgsfield_job_id` from `character.json` (human-model concepts) |
-| `image-generation` | `generate_image` | `higgsfield_job_id` from `character.json` (optional) |
-| `generated-clips` | `generate_video` | `first_frame_job_id`, `last_frame_job_id`, `character_reference_job_id` from approved video-prompt |
-
-These agents require `mcp_overrides` in `agents-config.yaml` with `strict_mcp_config: true` to load the Higgsfield MCP server.
+| `character` | `higgsfield generate create <model> --prompt "..." --wait --json` | — (portrait generation) |
+| `ml-creator` | `higgsfield generate create <model> --prompt "..." --image <ref> --wait --json` | product upload_id; `higgsfield_job_id` from `character.json` (human-model concepts) |
+| `image-generation` | `higgsfield generate create <model> --prompt "..." --image <char_job_id> --wait --json` | `higgsfield_job_id` from `character.json` (optional) |
+| `generated-clips` | `higgsfield generate create <model> --prompt "..." --start-image <first> --end-image <last> --wait --json` | `first_frame_job_id`, `last_frame_job_id`, `character_reference_job_id` from approved video-prompt |
 
 ### Video model reference
 

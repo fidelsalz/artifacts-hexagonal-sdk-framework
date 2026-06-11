@@ -54,8 +54,11 @@ Wait for confirmation or adjustments before continuing.
 
 ## Step 3 — Select a model
 
-Once the profile is confirmed, call `mcp__claude_ai_higgsfield__models_explore` and present
-the available image models clearly. Ask the user which model to use.
+Once the profile is confirmed, run `higgsfield model list --image` and present the available
+image models clearly. Ask the user which model to use. For character portraits, good defaults
+are `nano_banana_2` (stylized/illustrated), `text2image_soul_v2` (realistic), or `gpt_image_2`
+(high-fidelity general). Run `higgsfield model get <jst>` to check supported params before
+generating.
 
 ---
 
@@ -74,21 +77,31 @@ Show the prompt to the user and confirm before generating.
 
 **On each attempt:**
 
-1. Count existing files in `assets/character/attempts/` to determine the attempt number
+1. Count existing files in `assets/character/attempts/` to determine the attempt number:
    ```bash
    ls assets/character/attempts/ | wc -l
    ```
    Use the next number (e.g. `attempt-001.png`, `attempt-002.png`, …)
 
-2. Call `mcp__claude_ai_higgsfield__generate_image` with the confirmed prompt and model.
+2. Generate the image:
+   ```bash
+   higgsfield generate create <model> \
+     --prompt "<confirmed prompt>" \
+     --aspect_ratio "2:3" \
+     --wait --json
+   ```
+   Capture `id` (job_id) and `result_url` from the JSON output.
 
-3. Poll with `mcp__claude_ai_higgsfield__job_status` or `mcp__claude_ai_higgsfield__job_display`
-   until the job status is `completed` or `failed`.
+3. Download the image to the attempts folder:
+   ```bash
+   curl -L "<result_url>" -o assets/character/attempts/attempt-NNN.png
+   ```
 
-4. On success: save the image URL / result to `assets/character/attempts/attempt-NNN.png`
-   (use Bash to download if needed: `curl -L "<url>" -o assets/character/attempts/attempt-NNN.png`).
-
-5. Tell the user the image is ready and ask: **approve or disapprove?**
+4. Display the image:
+   ```
+   ![Character attempt NNN](assets/character/attempts/attempt-NNN.png)
+   ```
+   Tell the user the image is ready and ask: **approve or disapprove?**
 
 **If disapproved:**
 - Ask for specific feedback ("What should change? Hair color? Expression? Wardrobe?")
@@ -133,16 +146,16 @@ Show the prompt to the user and confirm before generating.
 }
 ```
 
-`higgsfield_job_id` is the job_id returned by Higgsfield for the approved generation attempt.
-Downstream agents (image-generation, generated-clips) pass this value directly in `medias[]`
-without re-uploading — Higgsfield accepts job_ids from prior generations as media references.
-```
+`higgsfield_job_id` is the `id` field returned by the CLI `--json` output for the approved
+generation. Downstream agents (image-generation, generated-clips, ml-creator) pass this value
+directly as `--image <higgsfield_job_id>` — Higgsfield accepts prior job IDs as media references
+without re-uploading.
 
 ---
 
 ## Notes
 
-- Check balance with `mcp__claude_ai_higgsfield__balance` if a job fails unexpectedly.
+- Check balance with `higgsfield account status` if a job fails unexpectedly.
 - Never skip the user confirmation step between profile proposal and image generation.
 - The generation prompt in `character.json` is the canonical reference — downstream agents
   (scene-specs, image-prompts) will embed it verbatim into their prompts to lock visual identity.

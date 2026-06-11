@@ -117,18 +117,6 @@ team:
         - Grep
         - Glob
         - Bash
-        - mcp__claude_ai_higgsfield__generate_image
-        - mcp__claude_ai_higgsfield__job_status
-        - mcp__claude_ai_higgsfield__job_display
-        - mcp__claude_ai_higgsfield__models_explore
-        - mcp__claude_ai_higgsfield__show_generations
-        - mcp__claude_ai_higgsfield__presets_show
-        - mcp__claude_ai_higgsfield__balance
-        - mcp__claude_ai_higgsfield__list_workspaces
-        - mcp__claude_ai_higgsfield__select_workspace
-        - mcp__claude_ai_higgsfield__show_plans_and_credits
-        - mcp__claude_ai_higgsfield__media_upload
-        - mcp__claude_ai_higgsfield__media_confirm
       max_concurrent:  1
       sections:        [IMG]
       add_dirs:        ["../../../PRD", "../../../INT"]
@@ -228,13 +216,6 @@ team:
         - Edit
         - Glob
         - Bash
-        - mcp__claude_ai_higgsfield__generate_image
-        - mcp__claude_ai_higgsfield__job_status
-        - mcp__claude_ai_higgsfield__job_display
-        - mcp__claude_ai_higgsfield__models_explore
-        - mcp__claude_ai_higgsfield__balance
-        - mcp__claude_ai_higgsfield__show_generations
-        - mcp__claude_ai_higgsfield__show_plans_and_credits
       max_concurrent:  1
       sections:        [INT]
       add_dirs:        ["..", "../.."]
@@ -354,18 +335,6 @@ team:
         - Write
         - Bash
         - Glob
-        - mcp__claude_ai_higgsfield__generate_image
-        - mcp__claude_ai_higgsfield__job_status
-        - mcp__claude_ai_higgsfield__job_display
-        - mcp__claude_ai_higgsfield__models_explore
-        - mcp__claude_ai_higgsfield__show_generations
-        - mcp__claude_ai_higgsfield__presets_show
-        - mcp__claude_ai_higgsfield__balance
-        - mcp__claude_ai_higgsfield__list_workspaces
-        - mcp__claude_ai_higgsfield__select_workspace
-        - mcp__claude_ai_higgsfield__show_plans_and_credits
-        - mcp__claude_ai_higgsfield__media_upload
-        - mcp__claude_ai_higgsfield__media_confirm
       max_concurrent:  1
       sections:        [SCE]
 
@@ -408,14 +377,6 @@ team:
         - Write
         - Bash
         - Glob
-        - mcp__claude_ai_higgsfield__generate_video
-        - mcp__claude_ai_higgsfield__job_status
-        - mcp__claude_ai_higgsfield__job_display
-        - mcp__claude_ai_higgsfield__models_explore
-        - mcp__claude_ai_higgsfield__balance
-        - mcp__claude_ai_higgsfield__show_plans_and_credits
-        - mcp__claude_ai_higgsfield__media_upload
-        - mcp__claude_ai_higgsfield__media_confirm
       max_concurrent:  1
       sections:        [SCE]
 
@@ -447,31 +408,4 @@ team:
 # MCP settings). Required when there is no .mcp.json in the project.
 # =============================================================================
 
-mcp_overrides:
-  ml-creator:
-    strict_mcp_config: true
-    mcp_servers:
-      "claude.ai higgsfield":
-        type: http
-        url: "https://mcp.higgsfield.ai/mcp"
 
-  character:
-    strict_mcp_config: true
-    mcp_servers:
-      "claude.ai higgsfield":
-        type: http
-        url: "https://mcp.higgsfield.ai/mcp"
-
-  image-generation:
-    strict_mcp_config: true
-    mcp_servers:
-      "claude.ai higgsfield":
-        type: http
-        url: "https://mcp.higgsfield.ai/mcp"
-
-  generated-clips:
-    strict_mcp_config: true
-    mcp_servers:
-      "claude.ai higgsfield":
-        type: http
-        url: "https://mcp.higgsfield.ai/mcp"
