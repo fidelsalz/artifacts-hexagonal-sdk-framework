@@ -28,11 +28,18 @@ _NUM_MAP = {
 }
 
 
+# Collapse "20 e 4" → "24", "30 e 2" → "32", etc. after _NUM_MAP runs.
+# Handles compound number words like "vinte e quatro" that TTS renders as "24"
+# and VEED transcribes back as the numeral.
+_COMPOUND_NUM_RE = re.compile(r'\b(20|30|40|50|60|70|80|90) e (\d)\b')
+
+
 def _norm(text: str) -> str:
     nfkd = unicodedata.normalize("NFKD", text.lower())
     ascii_text = "".join(c for c in nfkd if not unicodedata.combining(c))
     clean = re.sub(r"[^a-z0-9\s]", "", ascii_text).strip()
-    return " ".join(_NUM_MAP.get(w, w) for w in clean.split())
+    mapped = " ".join(_NUM_MAP.get(w, w) for w in clean.split())
+    return _COMPOUND_NUM_RE.sub(lambda m: str(int(m.group(1)) + int(m.group(2))), mapped)
 
 
 # ── SRT parsing ──────────────────────────────────────────────────────────────
@@ -74,12 +81,13 @@ def _find_first(tokens: list[dict], from_idx: int, word: str) -> int:
     return -1
 
 
-def _find_last(tokens: list[dict], from_idx: int, word: str, window: int = 15) -> int:
+def _find_last(tokens: list[dict], from_idx: int, word: str, window: int = 8) -> int:
     """Return index of last token within window containing word (exact normalised match).
 
     Using the last occurrence prevents repeated words (e.g. percentage values)
-    from anchoring too early. A window of 15 tokens covers the longest expected
-    line without spilling into the next line's content.
+    from anchoring too early. Window of 8 covers intra-line repetition without
+    spilling into later lines (window=15 caused common words like "você" to match
+    tokens belonging to the next script line).
     """
     target = _norm(word)
     if not target:

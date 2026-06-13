@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -20,6 +21,18 @@ def _track(available: bool, items: list) -> dict:
     return {"available": available, "items": items}
 
 
+def _find_frame_img(directory: Path, stem: str, tag: str) -> str | None:
+    """Locate a frame image trying both naming conventions: {stem}-{tag}-frame.* and {stem}-{tag}.*"""
+    for pattern in (f"{stem}-{tag}-frame.*", f"{stem}-{tag}.*"):
+        match = next(
+            (str(x) for x in sorted(directory.glob(pattern)) if x.suffix.lower() in _IMAGE_EXTS),
+            None,
+        )
+        if match:
+            return match
+    return None
+
+
 def _collect_ig_attempts(ig_dir: Path) -> dict:
     """Collect image-generation attempt data for a shot's ig directory."""
     approved = []
@@ -33,25 +46,59 @@ def _collect_ig_attempts(ig_dir: Path) -> dict:
                 ff = data.get("first_frame") or {}
                 lf = data.get("last_frame") or {}
                 stem = p.stem  # e.g. "attempt-001"
-                first_frame_img = next(
-                    (str(x) for x in sorted(approved_dir.glob(f"{stem}-first-frame.*"))
-                     if x.suffix.lower() in _IMAGE_EXTS), None
-                )
-                last_frame_img = next(
-                    (str(x) for x in sorted(approved_dir.glob(f"{stem}-last-frame.*"))
-                     if x.suffix.lower() in _IMAGE_EXTS), None
-                )
                 approved.append({
                     "attempt": data.get("attempt"),
                     "model": data.get("model"),
                     "first_frame_job_id": ff.get("job_id"),
                     "last_frame_job_id": lf.get("job_id"),
                     "character_reference_job_id": data.get("character_reference_job_id"),
-                    "first_frame": first_frame_img,
-                    "last_frame": last_frame_img,
+                    "first_frame": _find_frame_img(approved_dir, stem, "first"),
+                    "last_frame": _find_frame_img(approved_dir, stem, "last"),
                 })
             except Exception:
                 pass
+
+    attempts = []
+    attempts_dir = ig_dir / "attempts"
+    if attempts_dir.is_dir():
+        seen_stems: set[str] = set()
+        # JSON-first pass: collect metadata + resolve images
+        for p in sorted(attempts_dir.iterdir()):
+            if not (p.is_file() and p.suffix == ".json"):
+                continue
+            try:
+                data = _read_json(p)
+                stem = p.stem
+                seen_stems.add(stem)
+                first_frame_img = _find_frame_img(attempts_dir, stem, "first")
+                last_frame_img = _find_frame_img(attempts_dir, stem, "last")
+                if first_frame_img or last_frame_img:
+                    attempts.append({
+                        "attempt": data.get("attempt"),
+                        "model": data.get("model"),
+                        "first_frame": first_frame_img,
+                        "last_frame": last_frame_img,
+                    })
+            except Exception:
+                pass
+        # Image-only pass: pick up images that have no JSON sidecar
+        for p in sorted(attempts_dir.iterdir()):
+            if not (p.is_file() and p.suffix.lower() in _IMAGE_EXTS):
+                continue
+            # Derive stem by stripping trailing -first/-first-frame/-last/-last-frame
+            base = re.sub(r"-(first|last)(-frame)?$", "", p.stem, flags=re.IGNORECASE)
+            if base in seen_stems:
+                continue
+            seen_stems.add(base)
+            first_frame_img = _find_frame_img(attempts_dir, base, "first")
+            last_frame_img = _find_frame_img(attempts_dir, base, "last")
+            if first_frame_img or last_frame_img:
+                attempts.append({
+                    "attempt": base,
+                    "model": None,
+                    "first_frame": first_frame_img,
+                    "last_frame": last_frame_img,
+                })
 
     total = 0
     for sub in ("attempts", "approved", "disapproved"):
@@ -59,7 +106,7 @@ def _collect_ig_attempts(ig_dir: Path) -> dict:
         if d.is_dir():
             total += sum(1 for p in d.iterdir() if p.is_file() and p.suffix == ".json")
 
-    return {"approved": approved, "attempts_count": total}
+    return {"approved": approved, "attempts": attempts, "attempts_count": total}
 
 
 def _gen_status_and_files(cwd: Path, shot_id: str) -> dict:
@@ -134,6 +181,29 @@ def _load_character_asset(char_dir: Path) -> dict:
     }
 
 
+def _load_product_asset(subdir: Path) -> dict:
+    """Build product file list. Image files are included directly; JSON cache files are
+    resolved to the source image via their 'filename' field in PRD/images/."""
+    prd_images_dir = subdir.parent.parent.parent.parent / "PRD" / "images"
+    files = []
+    for p in sorted(subdir.rglob("*")):
+        if not p.is_file():
+            continue
+        if p.suffix.lower() in _IMAGE_EXTS:
+            files.append(str(p))
+        elif p.suffix == ".json":
+            try:
+                data = _read_json(p)
+                filename = data.get("filename")
+                if filename:
+                    img_path = prd_images_dir / filename
+                    if img_path.is_file():
+                        files.append(str(img_path))
+            except Exception:
+                pass
+    return {"available": bool(files), "files": files}
+
+
 def _load_assets(cwd: Path) -> dict:
     """Return available assets from the assets/ folder in the hook root."""
     assets_dir = cwd / "assets"
@@ -147,6 +217,8 @@ def _load_assets(cwd: Path) -> dict:
         name = subdir.name
         if name == "character":
             result["character"] = _load_character_asset(subdir)
+        elif name == "product":
+            result["product"] = _load_product_asset(subdir)
         else:
             files = sorted(str(p) for p in subdir.rglob("*") if p.is_file())
             result[name] = {"available": bool(files), "files": files}

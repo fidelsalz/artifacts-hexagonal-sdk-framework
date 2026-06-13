@@ -13,7 +13,11 @@
 
 Your cwd is an arc folder (e.g. `A02R01/`). The folder name is the arc ID — derive it
 from the last segment of your cwd path. Read all `.md` and `.json` files in your cwd for
-context (arc brief, timing blueprint). Generate 5 scroll-stopping hook variants.
+context (narrative concept, timing blueprint).
+If `{arc_id}-execution.md` is present, read it and match hook delivery to the selected style:
+direct-to-camera statement for UGC Testimonial; action-led opener for Product Showcase;
+presenter challenge for Hybrid UGC. Hook type and wording should feel native to the style.
+Generate 5 scroll-stopping hook variants.
 
 Hook folders are named `{arc}H{n:02d}` — e.g. if your cwd is `A02R01/`, create
 `A02R01H01/`, `A02R01H02/`, … `A02R01H05/`. No campaign prefix.

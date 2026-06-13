@@ -168,6 +168,24 @@ team:
       max_concurrent:  1
       sections:        [INT]
 
+    execution-style:
+      id:              "execution-style"
+      name:            "Execution Style"
+      role:            "Proposes production style for the narrative — framing, presenter rules, and micro-expression guidance for generative models"
+      comm_type:       ws
+      cwd_pattern:     'A\d+R\d+$'
+      prompt_file:     "{campaign_dir}/agents/prompts/execution-style.md"
+      basic_prompt: >-
+        Your working directory is {cwd}.
+        Read your instructions at {prompt_file}.
+        Begin immediately — read the narrative concept in your cwd and propose execution styles.
+      model:           *model
+      permission_mode: *dontask_mode
+      allowed_tools:   *write_tools
+      max_concurrent:  1
+      sections:        [INT]
+      add_dirs:        [".."]
+
     timing:
       id:              "timing"
       name:            "Timing Blueprint"
@@ -323,7 +341,11 @@ team:
       comm_type:       ws
       cwd_pattern:     'A\d+R\d+H\d+$'
       prompt_file:     "{campaign_dir}/agents/prompts/image-generation.md"
-      basic_prompt:    *basic_prompt
+      basic_prompt: >-
+        Your working directory is {cwd}.
+        Read your instructions at {prompt_file}.
+        On connect: run the inputs guard, build the status table, and present it to the user.
+        Do NOT generate anything automatically — wait for the user to tell you which shot to work on.
       model:           *model
       permission_mode: *dontask_mode
       required_inputs:
@@ -337,6 +359,7 @@ team:
         - Glob
       max_concurrent:  1
       sections:        [SCE]
+      add_dirs:        ["../../PRD"]
 
     video-prompts:
       id:              "video-prompts"

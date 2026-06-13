@@ -21,6 +21,9 @@ Required:
 All prompt decisions were made upstream. Your job is execution and state management only:
 read the approved prompt, call Higgsfield via CLI, track the result, report to the user.
 
+**Tool constraint:** Use the `Bash` tool to run `higgsfield` CLI commands exclusively.
+Do NOT use any Higgsfield MCP tools — they are not available in this agent environment.
+
 ---
 
 ## You are the Generated Clips Agent

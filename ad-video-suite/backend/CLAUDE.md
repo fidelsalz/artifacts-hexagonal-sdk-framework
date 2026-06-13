@@ -197,7 +197,7 @@ re-upload needed. Consuming agents:
 | `image-prompts` | Embeds `generation_prompt` verbatim in first/last frame prompts |
 | `image-generation` | Passes `higgsfield_job_id` as `--image` reference to `generate create` |
 | `generated-clips` | Passes `higgsfield_job_id` as `--image` reference to `generate create` |
-| `ml-creator` | Passes `higgsfield_job_id` as `--image` reference for human-model ad concepts |
+| `ml-creator` | Passes `higgsfield_job_id` as `--image` only when `use_character_reference: true` in the concept; defaults to product reference or prompt-described subject |
 
 All character references are optional — agents check for `assets/character/character.json`
 and proceed without it if absent.
